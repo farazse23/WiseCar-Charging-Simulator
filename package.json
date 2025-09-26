@@ -1,0 +1,29 @@
+{
+  "name": "wisecar-charger-simulator",
+  "version": "1.0.0",
+  "description": "WiseCar EV Charger WebSocket Simulator",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server-simple.js",
+    "dev": "node server-simple.js",
+    "dashboard": "node dashboard-server.js",
+    "test": "node test-client.js ws://localhost:3000"
+  },
+  "keywords": [
+    "websocket",
+    "ev-charger",
+    "simulator",
+    "mdns",
+    "iot"
+  ],
+  "author": "WiseCar Simulator",
+  "license": "MIT",
+  "dependencies": {
+    "bonjour": "^3.5.0",
+    "express": "^4.21.2",
+    "ws": "^8.14.2"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}

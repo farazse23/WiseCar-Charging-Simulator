@@ -1,0 +1,561 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🔌 WiseCar Charger Simulator Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+
+        .dashboard {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 15px;
+            padding: 25px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+
+        .card-title {
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: #2c3e50;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .status-running {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .status-stopped {
+            background: #f8d7da;
+            color: #721c24;
+        }
+
+        .server-info {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .info-item {
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+
+        .info-label {
+            font-size: 0.85rem;
+            color: #6c757d;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .info-value {
+            font-size: 1.1rem;
+            font-weight: 600;
+            color: #495057;
+            word-break: break-all;
+        }
+
+        .button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin: 5px 0;
+        }
+
+        .button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .button.danger {
+            background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+        }
+
+        .button.success {
+            background: linear-gradient(135deg, #51cf66 0%, #40c057 100%);
+        }
+
+        .telemetry-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+        }
+
+        .telemetry-item {
+            text-align: center;
+            padding: 15px;
+            background: linear-gradient(135deg, #74b9ff 0%, #0984e3 100%);
+            color: white;
+            border-radius: 10px;
+        }
+
+        .telemetry-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            margin-bottom: 5px;
+        }
+
+        .telemetry-label {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            text-transform: uppercase;
+        }
+
+        .log-container {
+            background: #2c3e50;
+            color: #ecf0f1;
+            border-radius: 10px;
+            padding: 20px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            height: 300px;
+            overflow-y: auto;
+            line-height: 1.4;
+        }
+
+        .log-entry {
+            margin-bottom: 8px;
+        }
+
+        .log-timestamp {
+            color: #95a5a6;
+            margin-right: 10px;
+        }
+
+        .log-message {
+            color: #ecf0f1;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .control-group label {
+            font-weight: 600;
+            color: #495057;
+        }
+
+        .control-group input {
+            padding: 10px;
+            border: 2px solid #dee2e6;
+            border-radius: 6px;
+            font-size: 1rem;
+            transition: border-color 0.3s ease;
+        }
+
+        .control-group input:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 40px;
+            opacity: 0.8;
+        }
+
+        @media (max-width: 768px) {
+            .header h1 {
+                font-size: 2rem;
+            }
+            
+            .dashboard {
+                grid-template-columns: 1fr;
+            }
+            
+            .server-info {
+                grid-template-columns: 1fr;
+            }
+            
+            .telemetry-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔌 WiseCar Charger Simulator</h1>
+            <p>Real-time monitoring and control dashboard</p>
+        </div>
+
+        <div class="dashboard">
+            <!-- Wi-Fi Mode Server -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">📡 WiseCar Charger Simulator</div>
+                    <div id="wifi-status" class="status-badge status-stopped">Stopped</div>
+                </div>
+                <div class="server-info">
+                    <div class="info-item">
+                        <div class="info-label">Port</div>
+                        <div class="info-value" id="wifi-port">3000</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">WebSocket URL</div>
+                        <div class="info-value" id="wifi-url">ws://localhost:3000</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">mDNS Service</div>
+                        <div class="info-value" id="mdns-service">wisecharger-mock.local</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">Device ID</div>
+                        <div class="info-value">device_mock_001</div>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button class="button success" id="start-wifi" onclick="startServer()">Start Server</button>
+                    <button class="button" id="connect-wifi" onclick="connectToServer()" disabled>Connect & Test</button>
+                    <button class="button danger" id="disconnect-wifi" onclick="disconnectFromServer()" disabled>Disconnect</button>
+                </div>
+            </div>
+
+            <!-- Live Telemetry -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">📊 Live Telemetry</div>
+                    <div id="connection-status" class="status-badge status-stopped">Disconnected</div>
+                </div>
+                <div class="telemetry-grid">
+                    <div class="telemetry-item">
+                        <div class="telemetry-value" id="telemetry-status">-</div>
+                        <div class="telemetry-label">Status</div>
+                    </div>
+                    <div class="telemetry-item">
+                        <div class="telemetry-value" id="telemetry-voltage">-</div>
+                        <div class="telemetry-label">Voltage (V)</div>
+                    </div>
+                    <div class="telemetry-item">
+                        <div class="telemetry-value" id="telemetry-current">-</div>
+                        <div class="telemetry-label">Current (A)</div>
+                    </div>
+                    <div class="telemetry-item">
+                        <div class="telemetry-value" id="telemetry-energy">-</div>
+                        <div class="telemetry-label">Energy (kWh)</div>
+                    </div>
+                    <div class="telemetry-item">
+                        <div class="telemetry-value" id="telemetry-temperature">-</div>
+                        <div class="telemetry-label">Temp (°C)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Control Panel -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">🎮 Control Panel</div>
+                </div>
+                <div class="controls">
+                    <div class="control-group">
+                        <button class="button success" onclick="sendCommand('start')" disabled id="btn-start">▶️ Start Charging</button>
+                    </div>
+                    <div class="control-group">
+                        <button class="button danger" onclick="sendCommand('stop')" disabled id="btn-stop">⏹️ Stop Charging</button>
+                    </div>
+                    <div class="control-group">
+                        <label for="limit-input">Current Limit (A)</label>
+                        <input type="number" id="limit-input" min="6" max="16" value="16">
+                        <button class="button" onclick="setLimit()" disabled id="btn-limit">Set Limit</button>
+                    </div>
+                    <div class="control-group">
+                        <button class="button" onclick="sendCommand('reset_energy')" disabled id="btn-reset">🔄 Reset Energy</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="card">
+            <div class="card-header">
+                <div class="card-title">📝 Activity Log</div>
+                <button class="button" onclick="clearLog()" style="width: auto; padding: 8px 16px;">Clear Log</button>
+            </div>
+            <div class="log-container" id="activity-log">
+                <div class="log-entry">
+                    <span class="log-timestamp">[System]</span>
+                    <span class="log-message">Dashboard loaded. Start a server to begin testing.</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>WiseCar Charger Simulator Dashboard | Built with ❤️ for EV Development</p>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let currentServerMode = null;
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            const logContainer = document.getElementById('activity-log');
+            const entry = document.createElement('div');
+            entry.className = 'log-entry';
+            
+            const prefix = type === 'error' ? '❌' : type === 'success' ? '✅' : type === 'warning' ? '⚠️' : '📡';
+            
+            entry.innerHTML = `
+                <span class="log-timestamp">[${timestamp}]</span>
+                <span class="log-message">${prefix} ${message}</span>
+            `;
+            
+            logContainer.appendChild(entry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        function clearLog() {
+            document.getElementById('activity-log').innerHTML = '';
+            log('Log cleared');
+        }
+
+        function updateServerStatus() {
+            fetch('/api/status')
+                .then(response => response.json())
+                .then(data => {
+                    // Update server status
+                    const wifiStatus = document.getElementById('wifi-status');
+                    const wifiConnect = document.getElementById('connect-wifi');
+                    if (data.wifiMode.running) {
+                        wifiStatus.textContent = 'Running';
+                        wifiStatus.className = 'status-badge status-running';
+                        wifiConnect.disabled = false;
+                        
+                        // Update port and URL info
+                        const actualPort = data.wifiMode.port || 3000;
+                        document.getElementById('wifi-port').textContent = actualPort;
+                        document.getElementById('wifi-url').textContent = `ws://localhost:${actualPort}`;
+                    } else {
+                        wifiStatus.textContent = 'Stopped';
+                        wifiStatus.className = 'status-badge status-stopped';
+                        wifiConnect.disabled = true;
+                    }
+                })
+                .catch(error => {
+                    log('Failed to check server status', 'error');
+                });
+        }
+
+        function startServer() {
+            log('Starting WiseCar charger simulator...', 'info');
+            log('Please run: node server-simple.js', 'warning');
+            log('Refresh the page after starting the server', 'info');
+        }
+
+        function connectToServer() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                ws.close();
+            }
+
+            // Try to get the actual port from the display, fallback to 3000
+            const portText = document.getElementById('wifi-port').textContent;
+            const port = portText || '3000';
+            const url = `ws://localhost:${port}`;
+            currentServerMode = 'wifi';
+            
+            log(`Connecting to server: ${url}`);
+            
+            ws = new WebSocket(url);
+
+            ws.onopen = function() {
+                log('Connected to charger simulator successfully', 'success');
+                document.getElementById('connection-status').textContent = 'Connected';
+                document.getElementById('connection-status').className = 'status-badge status-running';
+                
+                // Enable control buttons and disconnect
+                ['btn-start', 'btn-stop', 'btn-limit', 'btn-reset'].forEach(id => {
+                    document.getElementById(id).disabled = false;
+                });
+                document.getElementById('disconnect-wifi').disabled = false;
+                document.getElementById('connect-wifi').disabled = true;
+            };
+
+            ws.onmessage = function(event) {
+                try {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.event === 'hello') {
+                        log(`Device handshake: ${data.displayName} (${data.deviceId})`);
+                        log(`Model: ${data.info.model}, Firmware: ${data.info.firmware}`);
+                    } else if (data.event === 'telemetry') {
+                        updateTelemetry(data.telemetry);
+                    } else if (data.ack !== undefined) {
+                        const status = data.ack ? 'success' : 'error';
+                        log(`Command response: ${data.msg}`, status);
+                    }
+                } catch (error) {
+                    log(`Raw message: ${event.data}`);
+                }
+            };
+
+            ws.onerror = function(error) {
+                log(`Connection error: ${error}`, 'error');
+            };
+
+            ws.onclose = function() {
+                log('Connection closed');
+                document.getElementById('connection-status').textContent = 'Disconnected';
+                document.getElementById('connection-status').className = 'status-badge status-stopped';
+                
+                // Disable control buttons and enable connect
+                ['btn-start', 'btn-stop', 'btn-limit', 'btn-reset'].forEach(id => {
+                    document.getElementById(id).disabled = true;
+                });
+                document.getElementById('disconnect-wifi').disabled = true;
+                document.getElementById('connect-wifi').disabled = false;
+                
+                // Clear telemetry
+                clearTelemetry();
+            };
+        }
+
+        function disconnectFromServer() {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                log('Disconnecting from server...', 'warning');
+                ws.close();
+            } else {
+                log('Not connected to any server', 'error');
+            }
+        }
+
+        function updateTelemetry(telemetry) {
+            document.getElementById('telemetry-status').textContent = telemetry.status;
+            document.getElementById('telemetry-voltage').textContent = telemetry.voltage;
+            document.getElementById('telemetry-current').textContent = telemetry.currentA;
+            document.getElementById('telemetry-energy').textContent = telemetry.energyKWh;
+            document.getElementById('telemetry-temperature').textContent = telemetry.temperatureC;
+        }
+
+        function clearTelemetry() {
+            ['telemetry-status', 'telemetry-voltage', 'telemetry-current', 'telemetry-energy', 'telemetry-temperature'].forEach(id => {
+                document.getElementById(id).textContent = '-';
+            });
+        }
+
+        function sendCommand(action) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server', 'error');
+                return;
+            }
+
+            const command = { action: action };
+            ws.send(JSON.stringify(command));
+            log(`Sent command: ${action}`);
+        }
+
+        function setLimit() {
+            const limit = parseInt(document.getElementById('limit-input').value);
+            if (limit < 6 || limit > 16) {
+                log('Current limit must be between 6 and 16 A', 'error');
+                return;
+            }
+
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server', 'error');
+                return;
+            }
+
+            const command = { action: 'set_limitA', value: limit };
+            ws.send(JSON.stringify(command));
+            log(`Sent command: set limit to ${limit}A`);
+        }
+
+        // Initialize
+        updateServerStatus();
+        
+        // Check server status every 5 seconds
+        setInterval(updateServerStatus, 5000);
+        
+        log('Dashboard initialized. Check server status above.');
+    </script>
+</body>
+</html>
