@@ -241,6 +241,90 @@
             opacity: 0.8;
         }
 
+        /* RFID Styles */
+        .rfid-container {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 20px;
+        }
+
+        .rfid-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #6c757d;
+            font-style: italic;
+        }
+
+        .rfid-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 15px;
+            margin-bottom: 10px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+            transition: all 0.3s ease;
+        }
+
+        .rfid-item:hover {
+            background: #e9ecef;
+            transform: translateX(5px);
+        }
+
+        .rfid-item.active {
+            background: #d4edda;
+            border-left-color: #28a745;
+        }
+
+        .rfid-info {
+            flex: 1;
+        }
+
+        .rfid-id {
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 5px;
+        }
+
+        .rfid-label {
+            font-size: 0.9rem;
+            color: #6c757d;
+        }
+
+        .rfid-owner {
+            font-size: 0.8rem;
+            color: #868e96;
+        }
+
+        .rfid-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .rfid-actions button {
+            padding: 8px 12px;
+            font-size: 0.8rem;
+            width: auto;
+            margin: 0;
+        }
+
+        .charging-indicator {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            background: #28a745;
+            border-radius: 50%;
+            margin-left: 10px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
         @media (max-width: 768px) {
             .header h1 {
                 font-size: 2rem;
@@ -326,6 +410,10 @@
                         <div class="telemetry-value" id="telemetry-temperature">-</div>
                         <div class="telemetry-label">Temp (°C)</div>
                     </div>
+                    <div class="telemetry-item">
+                        <div class="telemetry-value" id="telemetry-clients">-</div>
+                        <div class="telemetry-label">Clients</div>
+                    </div>
                 </div>
             </div>
 
@@ -349,6 +437,24 @@
                     <div class="control-group">
                         <button class="button" onclick="sendCommand('reset_energy')" disabled id="btn-reset">🔄 Reset Energy</button>
                     </div>
+                </div>
+            </div>
+
+            <!-- RFID Management -->
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-title">📱 RFID Management</div>
+                    <div id="rfid-count" class="status-badge status-stopped">0 RFIDs</div>
+                </div>
+                <div id="rfid-list" class="rfid-container">
+                    <div class="rfid-empty">
+                        <p>No RFIDs registered</p>
+                        <p>Connect your Flutter app to sync RFIDs</p>
+                    </div>
+                </div>
+                <div class="controls">
+                    <button class="button" onclick="refreshRFIDs()" disabled id="btn-refresh-rfids">🔄 Refresh RFIDs</button>
+                    <button class="button" onclick="clearRFIDs()" disabled id="btn-clear-rfids">🗑️ Clear All</button>
                 </div>
             </div>
         </div>
@@ -439,7 +545,10 @@
             // Try to get the actual port from the display, fallback to 3000
             const portText = document.getElementById('wifi-port').textContent;
             const port = portText || '3000';
-            const url = `ws://localhost:${port}`;
+            
+            // Use the same host as the current page (dashboard)
+            const host = window.location.hostname || 'localhost';
+            const url = `ws://${host}:${port}`;
             currentServerMode = 'wifi';
             
             log(`Connecting to server: ${url}`);
@@ -457,6 +566,9 @@
                 });
                 document.getElementById('disconnect-wifi').disabled = false;
                 document.getElementById('connect-wifi').disabled = true;
+                
+                // Enable RFID controls
+                enableRFIDControls();
             };
 
             ws.onmessage = function(event) {
@@ -466,11 +578,36 @@
                     if (data.event === 'hello') {
                         log(`Device handshake: ${data.displayName} (${data.deviceId})`);
                         log(`Model: ${data.info.model}, Firmware: ${data.info.firmware}`);
+                        log(`RFID Support: ${data.info.rfidSupported ? 'Yes' : 'No'}`);
+                        
+                        // Update RFIDs from handshake
+                        if (data.rfids) {
+                            updateRFIDList(data.rfids);
+                            log(`Loaded ${data.rfids.length} RFIDs from device`);
+                        }
                     } else if (data.event === 'telemetry') {
+                        console.log('Received telemetry:', data.telemetry);
                         updateTelemetry(data.telemetry);
+                    } else if (data.event === 'rfid_list') {
+                        updateRFIDList(data.rfids);
+                        log(`RFID list updated: ${data.count} RFIDs`);
+                    } else if (data.event === 'rfid_scanned') {
+                        handleRFIDScan(data);
+                    } else if (data.event === 'device_disconnect') {
+                        log(`Device disconnect: ${data.reason}`, 'warning');
+                        // Connection will close automatically, onclose handler will update UI
+                    } else if (data.event === 'session_started') {
+                        log(`Session started: ${data.session.sessionId} (${data.session.sessionType})`, 'success');
+                    } else if (data.event === 'session_completed') {
+                        log(`Session completed: ${data.session.sessionId} - ${data.reason}`, 'info');
                     } else if (data.ack !== undefined) {
                         const status = data.ack ? 'success' : 'error';
                         log(`Command response: ${data.msg}`, status);
+                        
+                        // Handle RFID sync response
+                        if (data.msg.includes('RFID') && data.count !== undefined) {
+                            updateRFIDCount(data.count);
+                        }
                     }
                 } catch (error) {
                     log(`Raw message: ${event.data}`);
@@ -493,6 +630,10 @@
                 document.getElementById('disconnect-wifi').disabled = true;
                 document.getElementById('connect-wifi').disabled = false;
                 
+                // Disable RFID controls
+                disableRFIDControls();
+                currentRFID = null;
+                
                 // Clear telemetry
                 clearTelemetry();
             };
@@ -508,15 +649,39 @@
         }
 
         function updateTelemetry(telemetry) {
+            console.log('Updating telemetry - Status:', telemetry.status, 'Clients:', telemetry.connectedClients);
+            
             document.getElementById('telemetry-status').textContent = telemetry.status;
             document.getElementById('telemetry-voltage').textContent = telemetry.voltage;
             document.getElementById('telemetry-current').textContent = telemetry.currentA;
             document.getElementById('telemetry-energy').textContent = telemetry.energyKWh;
             document.getElementById('telemetry-temperature').textContent = telemetry.temperatureC;
+            document.getElementById('telemetry-clients').textContent = telemetry.connectedClients || 0;
+            
+            // Update connection status indicator based on actual status
+            const statusElement = document.getElementById('connection-status');
+            console.log('Current status element:', statusElement ? statusElement.textContent : 'NOT FOUND');
+            
+            if (telemetry.status === 'charging') {
+                statusElement.textContent = 'Charging';
+                statusElement.className = 'status-badge status-charging';
+                console.log('Set status to CHARGING');
+            } else if (telemetry.status === 'connected') {
+                statusElement.textContent = 'Connected';
+                statusElement.className = 'status-badge status-connected';
+                console.log('Set status to CONNECTED');
+            } else if (telemetry.status === 'disconnected') {
+                statusElement.textContent = 'Disconnected';
+                statusElement.className = 'status-badge status-stopped';
+                console.log('Set status to DISCONNECTED');
+            }
+            
+            // Update current RFID when it changes
+            updateTelemetryRFID(telemetry);
         }
 
         function clearTelemetry() {
-            ['telemetry-status', 'telemetry-voltage', 'telemetry-current', 'telemetry-energy', 'telemetry-temperature'].forEach(id => {
+            ['telemetry-status', 'telemetry-voltage', 'telemetry-current', 'telemetry-energy', 'telemetry-temperature', 'telemetry-clients'].forEach(id => {
                 document.getElementById(id).textContent = '-';
             });
         }
@@ -549,11 +714,154 @@
             log(`Sent command: set limit to ${limit}A`);
         }
 
+        // RFID Management Functions
+        let currentRFID = null;
+
+        function updateRFIDList(rfids) {
+            const container = document.getElementById('rfid-list');
+            const countBadge = document.getElementById('rfid-count');
+            
+            // Store in localStorage
+            localStorage.setItem('wisecar_rfids', JSON.stringify(rfids));
+            
+            // Update count badge
+            updateRFIDCount(rfids.length);
+            
+            if (!rfids || rfids.length === 0) {
+                container.innerHTML = `
+                    <div class="rfid-empty">
+                        <p>No RFIDs registered</p>
+                        <p>Connect your Flutter app to sync RFIDs</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = rfids.map(rfid => `
+                <div class="rfid-item ${currentRFID === rfid.rfidId ? 'active' : ''}" id="rfid-${rfid.rfidId}">
+                    <div class="rfid-info">
+                        <div class="rfid-id">
+                            ${rfid.rfidId}
+                            ${currentRFID === rfid.rfidId ? '<span class="charging-indicator"></span>' : ''}
+                        </div>
+                        <div class="rfid-label">${rfid.label}</div>
+                        <div class="rfid-owner">Owner: ${rfid.ownerName}</div>
+                    </div>
+                    <div class="rfid-actions">
+                        <button class="button success" onclick="simulateRFIDTap('${rfid.rfidId}')">
+                            ${currentRFID === rfid.rfidId ? '⏹️ Stop' : '▶️ Tap'}
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updateRFIDCount(count) {
+            const countBadge = document.getElementById('rfid-count');
+            countBadge.textContent = `${count} RFIDs`;
+            countBadge.className = `status-badge ${count > 0 ? 'status-running' : 'status-stopped'}`;
+        }
+
+        function handleRFIDScan(data) {
+            const { rfidId, status, energyKWh } = data;
+            
+            if (status === 'started') {
+                currentRFID = rfidId;
+                log(`🔌 Charging started with RFID: ${rfidId}`, 'success');
+            } else if (status === 'stopped') {
+                currentRFID = null;
+                log(`⏹️ Charging stopped. Session energy: ${energyKWh} kWh`, 'warning');
+            }
+            
+            // Update RFID display
+            const storedRFIDs = JSON.parse(localStorage.getItem('wisecar_rfids') || '[]');
+            updateRFIDList(storedRFIDs);
+        }
+
+        function simulateRFIDTap(rfidId) {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server', 'error');
+                return;
+            }
+
+            // Use HTTP endpoint for RFID simulation
+            fetch(`http://localhost:3002/simulate-rfid/${rfidId}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    log(`📱 RFID tapped: ${rfidId} - ${data.message}`, 'success');
+                } else {
+                    log(`❌ RFID error: ${data.message}`, 'error');
+                }
+            })
+            .catch(error => {
+                log(`❌ RFID simulation failed: ${error.message}`, 'error');
+            });
+        }
+
+        function refreshRFIDs() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server', 'error');
+                return;
+            }
+
+            const command = { action: 'list_rfids' };
+            ws.send(JSON.stringify(command));
+            log('Refreshing RFID list...');
+        }
+
+        function clearRFIDs() {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                log('Not connected to server', 'error');
+                return;
+            }
+
+            if (confirm('Are you sure you want to clear all RFIDs? This will sync an empty list.')) {
+                const command = { action: 'sync_rfids', rfids: [] };
+                ws.send(JSON.stringify(command));
+                log('Clearing all RFIDs...', 'warning');
+            }
+        }
+
+        // Update telemetry to track current RFID
+        function updateTelemetryRFID(telemetry) {
+            // Update current RFID when it changes
+            if (telemetry.currentRFID !== currentRFID) {
+                currentRFID = telemetry.currentRFID;
+                // Refresh RFID display
+                const storedRFIDs = JSON.parse(localStorage.getItem('wisecar_rfids') || '[]');
+                if (storedRFIDs.length > 0) {
+                    updateRFIDList(storedRFIDs);
+                }
+            }
+        }
+
+        // Enable RFID buttons when connected
+        function enableRFIDControls() {
+            ['btn-refresh-rfids', 'btn-clear-rfids'].forEach(id => {
+                document.getElementById(id).disabled = false;
+            });
+        }
+
+        function disableRFIDControls() {
+            ['btn-refresh-rfids', 'btn-clear-rfids'].forEach(id => {
+                document.getElementById(id).disabled = true;
+            });
+        }
+
         // Initialize
         updateServerStatus();
         
         // Check server status every 5 seconds
         setInterval(updateServerStatus, 5000);
+        
+        // Load RFIDs from localStorage on startup
+        const storedRFIDs = JSON.parse(localStorage.getItem('wisecar_rfids') || '[]');
+        if (storedRFIDs.length > 0) {
+            updateRFIDList(storedRFIDs);
+        }
         
         log('Dashboard initialized. Check server status above.');
     </script>

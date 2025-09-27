@@ -6,8 +6,10 @@
   "scripts": {
     "start": "node server-simple.js",
     "dev": "node server-simple.js",
+    "enhanced": "node server-enhanced.js",
     "dashboard": "node dashboard-server.js",
-    "test": "node test-client.js ws://localhost:3000"
+    "test": "node test-client.js ws://localhost:3000",
+    "test-rfid": "node test-rfid-client.js ws://localhost:3000"
   },
   "keywords": [
     "websocket",
