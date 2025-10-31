@@ -597,9 +597,13 @@
                         log(`Device disconnect: ${data.reason}`, 'warning');
                         // Connection will close automatically, onclose handler will update UI
                     } else if (data.event === 'session_started') {
-                        log(`Session started: ${data.session.sessionId} (${data.session.sessionType})`, 'success');
+                        const owner = data.session.ownerName ? ` | Owner: ${data.session.ownerName}` : '';
+                        const tag = data.session.label ? ` | Tag: ${data.session.label}` : '';
+                        log(`Session started: ${data.session.sessionId} (${data.session.sessionType})${owner}${tag}`, 'success');
                     } else if (data.event === 'session_completed') {
-                        log(`Session completed: ${data.session.sessionId} - ${data.reason}`, 'info');
+                        const owner = data.session.ownerName ? ` | Owner: ${data.session.ownerName}` : '';
+                        const tag = data.session.label ? ` | Tag: ${data.session.label}` : '';
+                        log(`Session completed: ${data.session.sessionId}${owner}${tag} - ${data.reason}`, 'info');
                     } else if (data.ack !== undefined) {
                         const status = data.ack ? 'success' : 'error';
                         log(`Command response: ${data.msg}`, status);
@@ -785,7 +789,10 @@
             }
 
             // Use HTTP endpoint for RFID simulation
-            fetch(`http://localhost:3002/simulate-rfid/${rfidId}`, {
+            const host = window.location.hostname || 'localhost';
+            const encodedId = encodeURIComponent(rfidId);
+            const url = `http://${host}:3002/simulate-rfid/${encodedId}`;
+            fetch(url, {
                 method: 'POST'
             })
             .then(response => response.json())

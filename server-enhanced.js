@@ -1,6 +1,8 @@
 const WebSocket = require('ws');
 const express = require('express');
 const bonjour = require('bonjour')();
+const fs = require('fs');
+const path = require('path');
 const os = require('os');
 const net = require('net');
 
@@ -38,7 +40,11 @@ let currentSession = null; // Active session object
 //   durationSeconds: 2800,
 //   status: "active" | "completed",
 //   deviceId: "device_mock_001",
-//   sessionType: "rfid" | "manual"
+//   sessionType: "rfid" | "manual",
+//   ownerUid: "...",        // from RFID at session start (if available)
+//   ownerName: "...",      // from RFID at session start
+//   label: "...",          // from RFID at session start
+//   unsynced: true|false    // mark for cloud sync
 // }
 
 // In-memory RFIDs array (matches Firestore structure)
@@ -53,6 +59,15 @@ let rfids = [
   //   createdAt: 1758890000
   // }
 ];
+
+// Load persisted RFIDs and sessions (if available)
+try {
+  const loadedRFIDs = loadJSON(RFIDS_FILE, null);
+  if (loadedRFIDs && Array.isArray(loadedRFIDs)) {
+    rfids = loadedRFIDs;
+    console.log(`💾 Loaded ${rfids.length} RFIDs from disk`);
+  }
+} catch {}
 
 // Get local IP address
 function getLocalIP() {
@@ -89,9 +104,36 @@ function findAvailablePort(startPort) {
 
 const localIP = getLocalIP();
 
+// Persistence: file paths and helpers
+const DATA_DIR = __dirname;
+const RFIDS_FILE = path.join(DATA_DIR, 'rfids.json');
+const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
+
+function loadJSON(filePath, fallback) {
+  try {
+    if (fs.existsSync(filePath)) {
+      const raw = fs.readFileSync(filePath, 'utf8');
+      return JSON.parse(raw);
+    }
+  } catch (e) {
+    console.log(`⚠️  Failed to load ${path.basename(filePath)}:`, e.message);
+  }
+  return fallback;
+}
+
+function saveJSON(filePath, value) {
+  try {
+    fs.writeFileSync(filePath, JSON.stringify(value, null, 2), 'utf8');
+  } catch (e) {
+    console.log(`⚠️  Failed to save ${path.basename(filePath)}:`, e.message);
+  }
+}
+
 // Device information including RFIDs (matching Firestore schema)
 function getDeviceInfo() {
-  const now = Math.floor(Date.now() / 1000);
+  const now = new Date();
+  const startDate = new Date(now.getTime() - 86400 * 1000); // 1 day ago
+  const endDate = new Date(now.getTime() + 365 * 24 * 60 * 60 * 1000); // 1 year from now
   return {
     event: 'hello',
     deviceId: config.deviceId,
@@ -104,8 +146,8 @@ function getDeviceInfo() {
       serial: 'WC-MOCK-123456'
     },
     warranty: {
-      start: now - 86400, // 1 day ago
-      end: now + (365 * 24 * 60 * 60) // 1 year from now
+      start: startDate.toISOString(),
+      end: endDate.toISOString()
     },
     network: {
       lastIp: localIP,
@@ -188,6 +230,7 @@ function addRFID(rfidData) {
   }
   
   rfids.push(rfidData);
+  saveJSON(RFIDS_FILE, rfids);
   console.log(`📋 RFID added: ${rfidData.rfidId} (${rfidData.label})`);
   return { success: true, msg: 'RFID added successfully' };
 }
@@ -237,6 +280,7 @@ function deleteRFID(rfidId) {
   }
   
   const deletedRFID = rfids.splice(index, 1)[0];
+  saveJSON(RFIDS_FILE, rfids);
   console.log(`�️  RFID deleted: ${rfidId} (${deletedRFID.label})`);
   return { success: true, msg: 'RFID deleted successfully' };
 }
@@ -263,14 +307,26 @@ function syncRFIDs(newRFIDs) {
         ownerName: 'Unknown User',
         createdAt: Math.floor(Date.now() / 1000)
       };
-    } else if (typeof rfidData === 'object' && rfidData.rfidId) {
-      // Handle full object format
+    } else if (rfidData && typeof rfidData === 'object') {
+      // Tolerant parsing for various client payloads
+      const idValue = rfidData.rfidId || rfidData.id || rfidData.rfid || rfidData.uid;
+      if (!idValue) {
+        console.log(`⚠️  Invalid RFID object at index ${i} (missing rfidId):`, rfidData);
+        continue;
+      }
+      const get = (obj, key, def) => (obj[key] !== undefined && obj[key] !== null ? obj[key] : def);
+      const ownerUid = get(rfidData, 'ownerUid', get(rfidData, 'ownerId', 'unknown'));
+      const ownerName = get(rfidData, 'ownerName', 'Unknown User');
+      const label = get(rfidData, 'label', `Card ${i + 1}`);
+      const createdAtRaw = get(rfidData, 'createdAt', Math.floor(Date.now() / 1000));
+      const createdAt = typeof createdAtRaw === 'string' ? parseInt(createdAtRaw, 10) : createdAtRaw;
+
       processedRFID = {
-        rfidId: rfidData.rfidId,
-        label: rfidData.label || `Card ${i + 1}`,
-        ownerUid: rfidData.ownerUid || 'unknown',
-        ownerName: rfidData.ownerName || 'Unknown User',
-        createdAt: rfidData.createdAt || Math.floor(Date.now() / 1000)
+        rfidId: String(idValue),
+        label: label,
+        ownerUid: ownerUid,
+        ownerName: ownerName,
+        createdAt: createdAt
       };
     } else {
       console.log(`⚠️  Invalid RFID format at index ${i}:`, rfidData);
@@ -289,6 +345,7 @@ function syncRFIDs(newRFIDs) {
   }
   
   rfids = processedRFIDs;
+  saveJSON(RFIDS_FILE, rfids);
   console.log(`📋 RFIDs synced from app: ${rfids.length} RFIDs`);
   
   // Log each RFID for debugging
@@ -311,6 +368,20 @@ function startChargingSession(sessionType, rfidId = null) {
   }
   
   const now = Math.floor(Date.now() / 1000);
+
+  // Enrich with owner info from RFID snapshot
+  let ownerUid = null;
+  let ownerName = null;
+  let label = null;
+  if (rfidId) {
+    const r = findRFID(rfidId);
+    if (r) {
+      ownerUid = r.ownerUid || null;
+      ownerName = r.ownerName || null;
+      label = r.label || null;
+    }
+  }
+
   currentSession = {
     sessionId: generateSessionId(),
     rfidId: rfidId,
@@ -321,11 +392,16 @@ function startChargingSession(sessionType, rfidId = null) {
     durationSeconds: null,
     status: "active",
     deviceId: config.deviceId,
-    sessionType: sessionType // "rfid" or "manual"
+    sessionType: sessionType, // "rfid" or "manual"
+    ownerUid: ownerUid,
+    ownerName: ownerName,
+    label: label,
+    unsynced: true
   };
   
   // Add to sessions array
   chargingSessions.push(currentSession);
+  saveJSON(SESSIONS_FILE, chargingSessions);
   
   // Update device state
   deviceState.isCharging = true;
@@ -358,6 +434,8 @@ function stopChargingSession(reason = 'Manual stop') {
   currentSession.endEnergyKWh = deviceState.energyKWh;
   currentSession.durationSeconds = now - currentSession.startTime;
   currentSession.status = "completed";
+  currentSession.unsynced = true; // mark for sync by default
+  saveJSON(SESSIONS_FILE, chargingSessions);
   
   // Update device state
   deviceState.isCharging = false;
@@ -549,6 +627,32 @@ function handleCommand(ws, message) {
         response = { ack: true, msg: `Sent ${chargingSessions.length} sessions` };
         break;
 
+      case 'get_unsynced_sessions':
+        const unsynced = chargingSessions.filter(s => s.unsynced === true);
+        ws.send(JSON.stringify({
+          event: 'unsynced_sessions',
+          sessions: unsynced,
+          count: unsynced.length,
+          timestamp: Math.floor(Date.now() / 1000)
+        }));
+        response = { ack: true, msg: `Sent ${unsynced.length} unsynced sessions` };
+        break;
+
+      case 'ack_sessions_synced':
+        if (Array.isArray(command.sessionIds)) {
+          let updated = 0;
+          chargingSessions.forEach(s => {
+            if (command.sessionIds.includes(s.sessionId)) {
+              if (s.unsynced) { s.unsynced = false; updated++; }
+            }
+          });
+          saveJSON(SESSIONS_FILE, chargingSessions);
+          response = { ack: true, msg: `Acknowledged ${updated} sessions` };
+        } else {
+          response = { ack: false, msg: 'sessionIds array required' };
+        }
+        break;
+
       case 'get_active_session':
         const activeSession = getActiveSession();
         if (activeSession) {
@@ -587,8 +691,17 @@ function handleCommand(ws, message) {
       case 'sync_rfids':
       case 'set_rfids':
         // Bulk sync RFIDs from Firestore/App
-        if (command.rfids && Array.isArray(command.rfids)) {
-          const result = syncRFIDs(command.rfids);
+        {
+          const incomingRFIDs = (command.rfids && Array.isArray(command.rfids))
+            ? command.rfids
+            : (command.data && Array.isArray(command.data.rfids))
+              ? command.data.rfids
+              : null;
+          if (!incomingRFIDs) {
+            response = { ack: false, msg: 'Invalid RFID array for sync (expected rfids[] or data.rfids[])' };
+            break;
+          }
+          const result = syncRFIDs(incomingRFIDs);
           response = { 
             ack: result.success, 
             msg: result.msg,
@@ -606,8 +719,6 @@ function handleCommand(ws, message) {
               timestamp: Math.floor(Date.now() / 1000)
             });
           }
-        } else {
-          response = { ack: false, msg: 'Invalid RFID array for sync' };
         }
         break;
         
@@ -681,6 +792,14 @@ async function startServer() {
     // Create HTTP server for RFID simulation endpoints
     const app = express();
     app.use(express.json());
+    // Allow CORS from dashboard and other tools
+    app.use((req, res, next) => {
+      res.header('Access-Control-Allow-Origin', '*');
+      res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+      res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+      if (req.method === 'OPTIONS') return res.sendStatus(200);
+      next();
+    });
 
     // RFID simulation endpoint
     app.post('/simulate-rfid/:rfidId', (req, res) => {
@@ -771,6 +890,28 @@ async function startServer() {
         activeSession: getActiveSession(),
         totalSessions: chargingSessions.length
       });
+    });
+
+    // Unsynced sessions for cloud sync
+    app.get('/sessions/unsynced', (req, res) => {
+      const unsynced = chargingSessions.filter(s => s.unsynced === true);
+      res.json({ success: true, sessions: unsynced, count: unsynced.length });
+    });
+
+    // Acknowledge sessions synced by app
+    app.post('/sessions/ack', (req, res) => {
+      const ids = req.body.sessionIds;
+      if (!Array.isArray(ids)) {
+        return res.status(400).json({ success: false, message: 'sessionIds array required' });
+      }
+      let updated = 0;
+      chargingSessions.forEach(s => {
+        if (ids.includes(s.sessionId)) {
+          if (s.unsynced) { s.unsynced = false; updated++; }
+        }
+      });
+      saveJSON(SESSIONS_FILE, chargingSessions);
+      res.json({ success: true, message: `Acknowledged ${updated} sessions` });
     });
 
     app.get('/sessions/active', (req, res) => {

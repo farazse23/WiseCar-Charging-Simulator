@@ -1,0 +1,34 @@
+[
+  {
+    "sessionId": "session_1761762574853_4okhlmncr",
+    "rfidId": "0F2F48DE",
+    "startTime": 1761762574,
+    "endTime": 1761762598,
+    "startEnergyKWh": 0,
+    "endEnergyKWh": 0.023846400891102258,
+    "durationSeconds": 24,
+    "status": "completed",
+    "deviceId": "device_mock_001",
+    "sessionType": "rfid",
+    "ownerUid": "oky4MSvzXdg4bgOJWpV3nLlLct32",
+    "ownerName": "Faraz",
+    "label": "Me",
+    "unsynced": true
+  },
+  {
+    "sessionId": "session_1761764781284_dvqrt87kq",
+    "rfidId": "0F2F48DE",
+    "startTime": 1761764781,
+    "endTime": 1761764925,
+    "startEnergyKWh": 0.023846400891102258,
+    "endEnergyKWh": 0.15837342040199687,
+    "durationSeconds": 144,
+    "status": "completed",
+    "deviceId": "device_mock_001",
+    "sessionType": "rfid",
+    "ownerUid": "oky4MSvzXdg4bgOJWpV3nLlLct32",
+    "ownerName": "Faraz",
+    "label": "Me",
+    "unsynced": true
+  }
+]
