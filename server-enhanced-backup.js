@@ -5,9 +5,6 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const net = require('net');
-const { exec } = require('child_process');
-const { promisify } = require('util');
-const execAsync = promisify(exec);
 
 // Configuration
 const config = {
@@ -151,7 +148,6 @@ const DATA_DIR = __dirname;
 const RFIDS_FILE = path.join(DATA_DIR, 'rfids.json');
 const SESSIONS_FILE = path.join(DATA_DIR, 'sessions.json');
 const NETWORK_CONFIG_FILE = path.join(DATA_DIR, 'network-config.json');
-const CONFIG_FILE = path.join(DATA_DIR, 'device-config.json');
 
 function loadJSON(filePath, fallback) {
   try {
@@ -176,75 +172,14 @@ function saveJSON(filePath, value) {
 // Get device IP based on mode
 function getDeviceIP() {
   if (networkConfig.mode === 'hotspot') {
-    return '192.168.1.10'; // Fixed IP for AP mode
+    return '192.168.1.10'; // Fixed IP in AP mode
   }
   return getLocalIP(); // Dynamic IP in Wi-Fi mode
 }
 
-// Real WiFi Hotspot Management
-class WiFiHotspot {
-  constructor() {
-    this.isActive = false;
-    this.ssid = `WiseCar-${config.deviceId.slice(-6)}`;
-    this.password = 'wisecar123';
-  }
-
-  async createWindowsHotspot() {
-    try {
-      console.log('📡 Creating Windows mobile hotspot...');
-      
-      // Stop any existing hotspot
-      await execAsync('netsh wlan stop hostednetwork').catch(() => {});
-      
-      // Configure hotspot
-      await execAsync(`netsh wlan set hostednetwork mode=allow ssid="${this.ssid}" key="${this.password}"`);
-      
-      // Start hotspot
-      const result = await execAsync('netsh wlan start hostednetwork');
-      
-      if (result.stdout.includes('started') || result.stdout.includes('The hosted network started')) {
-        this.isActive = true;
-        console.log('✅ WiFi Hotspot created successfully!');
-        console.log(`📡 SSID: ${this.ssid}`);
-        console.log(`🔑 Password: ${this.password}`);
-        console.log('📱 Connect your phone to this network to access the charger');
-        console.log(`🌐 Access at: http://192.168.1.10:${config.port}`);
-        return true;
-      } else {
-        throw new Error('Failed to start hotspot');
-      }
-    } catch (error) {
-      console.log('❌ Failed to create Windows hotspot:', error.message);
-      console.log('💡 Running in simulation mode - connect to same network as PC');
-      return false;
-    }
-  }
-
-  async stopHotspot() {
-    try {
-      await execAsync('netsh wlan stop hostednetwork');
-      this.isActive = false;
-      console.log('📡 Windows hotspot stopped');
-    } catch (error) {
-      console.log('⚠️  Error stopping hotspot:', error.message);
-    }
-  }
-
-  getConnectionInfo() {
-    return {
-      ssid: this.ssid,
-      password: this.password,
-      ip: '192.168.1.10',
-      active: this.isActive
-    };
-  }
-}
-
-// Initialize WiFi hotspot manager
-const wifiHotspot = new WiFiHotspot();
-
-// Device information for WiseCar app handshake
+// Device information including RFIDs (matching Firestore schema)
 function getDeviceInfo() {
+  const now = new Date();
   const startDate = new Date('2025-10-30T12:34:56.789Z');
   const endDate = new Date('2026-10-31T12:34:56.789Z');
   
@@ -272,7 +207,7 @@ function getDeviceInfo() {
   };
 }
 
-// Generate telemetry data matching WiseCar app protocol
+// Generate telemetry data matching new protocol v2.1
 function generateTelemetry() {
   // Update device state with realistic values
   if (deviceState.connectedClients.size > 0) {
@@ -303,7 +238,7 @@ function generateTelemetry() {
     deviceState.powerkWh = 0;
   }
   
-  // Build telemetry message according to WiseCar app protocol
+  // Build telemetry message according to new protocol
   const telemetryMessage = {
     event: "telemetry",
     deviceId: config.deviceId,
@@ -320,8 +255,8 @@ function generateTelemetry() {
       sessionId: currentSession.sessionId,
       sessionStatus: currentSession.sessionStatus,
       sessionUserId: currentSession.sessionUserId,
-      startAt: currentSession.startAt, // WiseCar uses 'startAt' not 'start'
-      endAt: currentSession.endAt,     // WiseCar uses 'endAt' not 'end'
+      startAt: currentSession.startAt,
+      endAt: currentSession.endAt,
       energykW: deviceState.energykW,
       rfidId: currentSession.rfidId
     } : null
@@ -497,14 +432,14 @@ function generateSessionId() {
 function startChargingSession(userId = null, rfidId = null) {
   // Stop any existing session first
   if (currentSession) {
-    stopChargingSession('Previous session auto-stopped');
+    stopChargingSession();
   }
   
   const now = new Date();
   
   currentSession = {
     sessionId: generateSessionId(),
-    sessionStatus: "charging",
+    sessionStatus: "started",
     sessionUserId: userId, // user who started (null for RFID)
     startAt: now.toISOString(),
     endAt: null,
@@ -522,24 +457,27 @@ function startChargingSession(userId = null, rfidId = null) {
   
   console.log(`🔌 Session started: ${currentSession.sessionId} (${rfidId ? 'RFID' : 'Manual'})`);
   
-  // Broadcast charging start event to all clients
-  console.log(`📡 Broadcasting charging start event to ${deviceState.connectedClients.size} clients`);
+  return currentSession;
+  
+  // Update device state
+  deviceState.isCharging = true;
+  deviceState.currentRFID = rfidId;
+  deviceState.sessionStartEnergy = deviceState.energyKWh;
+  deviceState.startTime = Date.now();
+  
+  console.log(`🔋 Session started: ${currentSession.sessionId} (${sessionType}${rfidId ? ` - ${rfidId}` : ''})`);
+  
+  // Broadcast session started event
   broadcastToClients({
-    type: "event",
-    command: "start_charging",
-    success: true,
-    data: {
-      sessionId: currentSession.sessionId,
-      startTime: currentSession.startAt,
-      message: "Charging started successfully"
-    },
-    timestamp: now.toISOString()
+    event: 'session_started',
+    session: currentSession,
+    timestamp: now
   });
   
   return currentSession;
 }
 
-function stopChargingSession(reason = 'Session ended') {
+function stopChargingSession() {
   if (!currentSession) {
     return null;
   }
@@ -549,7 +487,7 @@ function stopChargingSession(reason = 'Session ended') {
   // Update current session
   currentSession.endAt = now.toISOString();
   currentSession.sessionStatus = "completed";
-  currentSession.energykW = deviceState.energykW; // Set final energy delivered
+  // energykW is already tracking session energy in deviceState.energykW
   
   // Update device state
   deviceState.isCharging = false;
@@ -558,22 +496,6 @@ function stopChargingSession(reason = 'Session ended') {
   console.log(`⏹️  Session completed: ${currentSession.sessionId} | Energy: ${deviceState.energykW.toFixed(3)} kW`);
   
   const completedSession = currentSession;
-  
-  // Broadcast charging stop event to all clients
-  console.log(`📡 Broadcasting charging stop event to ${deviceState.connectedClients.size} clients`);
-  broadcastToClients({
-    type: "event",
-    command: "stop_charging",
-    success: true,
-    data: {
-      sessionId: completedSession.sessionId,
-      endTime: completedSession.endAt,
-      energyDelivered: deviceState.energykW,
-      message: "Charging stopped successfully"
-    },
-    timestamp: now.toISOString()
-  });
-  
   currentSession = null; // Clear active session
   
   return completedSession;
@@ -597,13 +519,9 @@ function simulateRFIDScan(rfidId) {
 
 // Broadcast message to all connected WebSocket clients
 function broadcastToClients(message) {
-  console.log(`📡 Broadcasting message to ${deviceState.connectedClients.size} clients:`, JSON.stringify(message, null, 2));
   deviceState.connectedClients.forEach(ws => {
     if (ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify(message));
-      console.log(`✅ Sent to client: ${message.type} - ${message.command || message.event}`);
-    } else {
-      console.log(`❌ Client connection not open, readyState: ${ws.readyState}`);
     }
   });
 }
@@ -638,27 +556,9 @@ function handleCommand(ws, message) {
   try {
     const command = JSON.parse(message);
     
-    // Protocol v2.1 - Handle new format with "type" field
+    // Protocol v2.1 - Handle new format first
     if (command.type) {
       handleProtocolV21Command(ws, command);
-      return;
-    }
-    
-    // WiseCar App Protocol - Handle config commands
-    if (command.config) {
-      handleConfigCommand(ws, command);
-      return;
-    }
-    
-    // WiseCar App Protocol - Handle action commands  
-    if (command.action) {
-      handleActionCommand(ws, command);
-      return;
-    }
-    
-    // WiseCar App Protocol - Handle system commands
-    if (command.command) {
-      handleSystemCommand(ws, command);
       return;
     }
     
@@ -748,793 +648,485 @@ function handleCommand(ws, message) {
   }
 }
 
-// WiseCar App Protocol - Config command handler
-function handleConfigCommand(ws, command) {
-  let response;
-  
-  switch (command.config) {
-    case 'network':
-      if (command.ssid && command.password) {
-        networkConfig.ssid = command.ssid;
-        networkConfig.password = command.password;
-        networkConfig.local = !!command.local;
-        networkConfig.mode = 'wifi';
-        
-        saveJSON(NETWORK_CONFIG_FILE, networkConfig);
-        
-        response = {
-          ack: true,
-          msg: "ok"
-        };
-        console.log(`📡 Network configured: SSID=${command.ssid}`);
-      } else {
-        response = {
-          ack: false,
-          msg: "error",
-          error: "Invalid network parameters"
-        };
-      }
-      break;
-      
-    case 'fastCharging':
-      if (typeof command.value === 'boolean') {
-        deviceSettings.fastCharging = command.value;
-        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-        
-        response = {
-          ack: true,
-          msg: "ok"
-        };
-        console.log(`⚡ Fast charging ${command.value ? 'enabled' : 'disabled'}`);
-      } else {
-        response = {
-          ack: false,
-          msg: "error",
-          error: "Invalid fastCharging value"
-        };
-      }
-      break;
-      
-    case 'autoPlug':
-      if (typeof command.value === 'boolean') {
-        deviceSettings.autoPlug = command.value;
-        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-        
-        response = {
-          ack: true,
-          msg: "ok"
-        };
-        console.log(`🔌 Auto plug ${command.value ? 'enabled' : 'disabled'}`);
-      } else {
-        response = {
-          ack: false,
-          msg: "error",
-          error: "Invalid autoPlug value"
-        };
-      }
-      break;
-      
-    case 'language':
-      if (typeof command.value === 'string') {
-        deviceSettings.language = command.value;
-        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-        
-        response = {
-          ack: true,
-          msg: "ok"
-        };
-        console.log(`🌐 Language set to: ${command.value}`);
-      } else {
-        response = {
-          ack: false,
-          msg: "error",
-          error: "Invalid language value"
-        };
-      }
-      break;
-      
-    case 'rfidSupported':
-      if (typeof command.value === 'boolean') {
-        deviceSettings.rfidSupported = command.value;
-        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-        
-        response = {
-          ack: true,
-          msg: "ok"
-        };
-        console.log(`🏷️ RFID support ${command.value ? 'enabled' : 'disabled'}`);
-      } else {
-        response = {
-          ack: false,
-          msg: "error",
-          error: "Invalid rfidSupported value"
-        };
-      }
-      break;
-      
-      case 'set_limitA':
-        if (typeof command.value === 'number' && command.value >= 8 && command.value <= 32) {
-          deviceSettings.limitA = command.value;
-          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          
-          response = {
-            ack: true,
-            msg: "ok"
-          };
-          console.log(`⚡ Current limit set to: ${command.value}A`);
-        } else {
-          response = {
-            ack: false,
-            msg: "error",
-            error: "Invalid current limit (must be 8-32A)"
-          };
-        }
-        break;
-        
-      case 'setTime':
-        if (command.data && command.data.year && command.data.month && command.data.day && 
-            command.data.hour !== undefined && command.data.minute !== undefined && command.data.second !== undefined) {
-          
-          // Store the device time settings
-          deviceSettings.deviceTime = {
-            year: command.data.year,
-            month: command.data.month,
-            day: command.data.day,
-            hour: command.data.hour,
-            minute: command.data.minute,
-            second: command.data.second,
-            setAt: new Date().toISOString()
-          };
-          
-          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          
-          response = {
-            ack: true,
-            msg: "ok"
-          };
-          console.log(`🕒 Device time set to: ${command.data.year}-${command.data.month.toString().padStart(2,'0')}-${command.data.day.toString().padStart(2,'0')} ${command.data.hour.toString().padStart(2,'0')}:${command.data.minute.toString().padStart(2,'0')}:${command.data.second.toString().padStart(2,'0')}`);
-        } else {
-          response = {
-            ack: false,
-            msg: "error",
-            error: "Invalid time data - year, month, day, hour, minute, second required"
-          };
-        }
-        break;
-        
-      case 'set_limitTime':
-        if (command.data && typeof command.data.value === 'number' && command.data.value > 0 && command.data.value <= 24) {
-          deviceSettings.limitTimeHours = command.data.value;
-          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          
-          response = {
-            ack: true,
-            msg: "ok"
-          };
-          console.log(`⏰ Charging time limit set to: ${command.data.value} hours`);
-        } else {
-          response = {
-            ack: false,
-            msg: "error",
-            error: "Invalid time limit (must be 1-24 hours)"
-          };
-        }
-        break;    default:
-      response = {
-        ack: false,
-        msg: "error",
-        error: "Unknown config command"
-      };
-  }
-  
-  ws.send(JSON.stringify(response));
-}
-
-// WiseCar App Protocol - Action command handler
-function handleActionCommand(ws, command) {
-  let response;
-  
-  switch (command.action) {
-    case 'start':
-      if (!deviceState.isCharging) {
-        const sessionType = 'manual';
-        const session = startChargingSession(sessionType, null, command.userId);
-        
-        // Apply fast charging and limit settings
-        if (command.fastCharging && deviceSettings.fastCharging) {
-          deviceSettings.limitA = 32; // Max current for fast charging
-        } else if (command.limitA) {
-          deviceSettings.limitA = Math.min(Math.max(command.limitA, 8), 32);
-        }
-        
-        response = {
-          ack: true,
-          msg: "ok"
-        };
-        console.log(`🚀 Charging started by user ${command.userId}`);
-      } else {
-        response = {
-          ack: false,
-          msg: "already charging"
-        };
-      }
-      break;
-      
-    case 'stop':
-      if (deviceState.isCharging) {
-        stopChargingSession('User requested stop');
-        response = {
-          ack: true,
-          msg: "ok"
-        };
-        console.log(`🛑 Charging stopped by user ${command.userId}`);
-      } else {
-        response = {
-          ack: false,
-          msg: "error",
-          error: "Not charging"
-        };
-      }
-      break;
-      
-    case 'set_limitA':
-      if (typeof command.value === 'number' && command.value >= 8 && command.value <= 32) {
-        deviceSettings.limitA = command.value;
-        response = {
-          ack: true,
-          msg: "ok"
-        };
-        console.log(`⚡ Current limit updated to: ${command.value}A`);
-      } else {
-        response = {
-          ack: false,
-          msg: "error",
-          error: "Invalid current limit (must be 8-32A)"
-        };
-      }
-      break;
-      
-    case 'rfid_numbers':
-      response = {
-        event: "rfid_numbers",
-        numbers: rfids.length
-      };
-      break;
-      
-    case 'rfid_list':
-      response = {
-        event: "rfid_list",
-        rfids: rfids
-      };
-      break;
-      
-    case 'rfid_add':
-      if (command.rfids && Array.isArray(command.rfids)) {
-        let added = 0;
-        for (const rfidData of command.rfids) {
-          if (rfidData.id) {
-            const existing = findRFIDById(rfidData.id);
-            if (!existing) {
-              rfids.push({
-                number: getNextRFIDNumber(),
-                id: rfidData.id,
-                userId: rfidData.userId || 'unknown'
-              });
-              added++;
-            }
-          }
-        }
-        saveJSON(RFIDS_FILE, rfids);
-        response = {
-          event: "rfid_add",
-          ok: true
-        };
-        console.log(`🏷️ Added ${added} RFIDs`);
-      } else {
-        response = {
-          ack: false,
-          msg: "error",
-          error: "Invalid RFID data"
-        };
-      }
-      break;
-      
-    case 'rfid_delete':
-      if (command.rfids && Array.isArray(command.rfids)) {
-        let deleted = 0;
-        for (const rfidData of command.rfids) {
-          if (rfidData.id) {
-            const index = rfids.findIndex(r => r.id === rfidData.id);
-            if (index !== -1) {
-              rfids.splice(index, 1);
-              deleted++;
-            }
-          }
-        }
-        // Renumber RFIDs
-        rfids.forEach((rfid, index) => {
-          rfid.number = index + 1;
-        });
-        saveJSON(RFIDS_FILE, rfids);
-        response = {
-          event: "rfid_delete",
-          ok: true
-        };
-        console.log(`🗑️ Deleted ${deleted} RFIDs`);
-      } else {
-        response = {
-          ack: false,
-          msg: "error", 
-          error: "Invalid RFID data"
-        };
-      }
-      break;
-      
-    case 'rfid_detection':
-      // Simulate RFID detection - return a fake RFID after small delay
-      setTimeout(() => {
-        const fakeRfid = "123456789";
-        ws.send(JSON.stringify({
-          event: "rfid_detection",
-          rfid: fakeRfid
-        }));
-        console.log(`🏷️ RFID detected: ${fakeRfid}`);
-      }, 2000);
-      return; // Don't send immediate response
-      
-    case 'last_session':
-      if (sessions.length > 0) {
-        const lastSession = sessions[sessions.length - 1];
-        response = {
-          event: "last_session",
-          session: lastSession
-        };
-      } else {
-        response = {
-          ack: false,
-          msg: "no session"
-        };
-      }
-      break;
-      
-    case 'get_session':
-      if (command.sessionId) {
-        const session = sessions.find(s => s.sessionId === command.sessionId);
-        if (session) {
-          response = {
-            event: "get_session",
-            session: session
-          };
-        } else {
-          response = {
-            ack: false,
-            msg: "no session"
-          };
-        }
-      } else {
-        response = {
-          ack: false,
-          msg: "error",
-          error: "Session ID required"
-        };
-      }
-      break;
-      
-    default:
-      response = {
-        ack: false,
-        msg: "error",
-        error: "Unknown action"
-      };
-  }
-  
-  ws.send(JSON.stringify(response));
-}
-
-// WiseCar App Protocol - System command handler
-function handleSystemCommand(ws, command) {
-  let response;
-  
-  switch (command.command) {
-    case 'ping':
-      response = {
-        command: "pong"
-      };
-      break;
-      
-    default:
-      response = {
-        ack: false,
-        msg: "error",
-        error: "Unknown command"
-      };
-  }
-  
-  ws.send(JSON.stringify(response));
-}
-
-// Protocol v2.1 command handler (DEPRECATED - keeping for reference)
+// Protocol v2.1 command handler
 function handleProtocolV21Command(ws, command) {
   let response;
   
-  // Config commands
-  if (command.type === 'config') {
-    switch (command.command) {
+  if (command.type === 'config' && command.command === 'network') {
+      if (typeof command.data.ssid === 'string' && typeof command.data.password === 'string') {
+        // Update network configuration
+        networkConfig.ssid = command.data.ssid;
+        networkConfig.password = command.data.password;
+        networkConfig.local = !!command.data.local;
+        networkConfig.mode = 'wifi'; // Switch to wifi mode after configuration
+        
+        // Persist network configuration
+        saveJSON(NETWORK_CONFIG_FILE, networkConfig);
+        
+        response = {
+          type: 'response',
+          command: 'network',
+          success: true,
+          data: {
+            ssid: command.data.ssid,
+            status: 'configured',
+            message: 'Network configuration saved. Device remains connected for simulator testing.'
+          },
+          timestamp: new Date().toISOString()
+        };
+        console.log(`📡 Network configured: SSID=${command.data.ssid}, mode=wifi`);
+        console.log(`⚠️  NOTE: Simulator does not actually switch networks - it stays at the same IP`);
+        console.log(`💡 For testing: Keep your phone on the same network as this PC`);
+        
+        // Broadcast updated device info to all clients (they stay connected)
+        setTimeout(() => {
+          const updatedInfo = getDeviceInfo();
+          updatedInfo.type = 'event';
+          updatedInfo.event = 'network_updated';
+          updatedInfo.data = {
+            message: 'Network configuration updated. Connection maintained for testing.'
+          };
+          updatedInfo.timestamp = new Date().toISOString();
+          broadcastToClients(updatedInfo);
+          console.log(`📡 Broadcasted network update to ${deviceState.connectedClients.size} clients`);
+        }, 500);
+      } else {
+        response = {
+          type: 'response',
+          command: 'network',
+          success: false,
+          error: 'Invalid network parameters (ssid and password required)',
+          timestamp: new Date().toISOString()
+        };
+      }
+    }
+    
+    // Legacy protocol support - backwards compatibility
+    switch (action) {
       case 'network':
-        if (command.data && typeof command.data.ssid === 'string' && typeof command.data.password === 'string') {
+        if (typeof command.ssid === 'string' && typeof command.password === 'string') {
           // Update network configuration
-          networkConfig.ssid = command.data.ssid;
-          networkConfig.password = command.data.password;
-          networkConfig.local = !!command.data.local;
-          networkConfig.mode = 'wifi';
+          networkConfig.ssid = command.ssid;
+          networkConfig.password = command.password;
+          networkConfig.local = !!command.local;
+          networkConfig.mode = 'wifi'; // Switch to wifi mode after configuration
           
+          // Persist network configuration
           saveJSON(NETWORK_CONFIG_FILE, networkConfig);
           
           response = {
-            type: 'response',
-            command: 'network',
-            success: true,
-            data: {
-              ssid: command.data.ssid,
-              status: 'configured',
-              message: 'Network configuration saved'
-            },
-            timestamp: new Date().toISOString()
+            command: 'ack',
+            ssid: command.ssid,
+            status: 'ok',
+            message: 'Network configuration saved. Device remains connected for simulator testing.'
           };
-          console.log(`📡 Network configured: SSID=${command.data.ssid}`);
+          console.log(`📡 Network configured: SSID=${command.ssid}, mode=wifi`);
+          console.log(`⚠️  NOTE: Simulator does not actually switch networks - it stays at the same IP`);
+          console.log(`💡 For testing: Keep your phone on the same network as this PC`);
+          
+          // Broadcast updated device info to all clients (they stay connected)
+          setTimeout(() => {
+            const updatedInfo = getDeviceInfo();
+            updatedInfo.event = 'network_updated';
+            updatedInfo.message = 'Network configuration updated. Connection maintained for testing.';
+            broadcastToClients(updatedInfo);
+            console.log(`📡 Broadcasted network update to ${deviceState.connectedClients.size} clients`);
+          }, 500);
         } else {
           response = {
-            type: 'response',
-            command: 'network',
-            success: false,
-            error: 'Invalid network parameters',
-            timestamp: new Date().toISOString()
+            command: 'ack',
+            ssid: command.ssid || null,
+            status: 'error',
+            msg: 'Invalid network parameters (ssid and password required)'
           };
         }
         break;
+      case 'start':
+        // New protocol v2.1 - action commands
+        if (command.type === 'action' && command.command === 'start_charging') {
+          if (!deviceState.isCharging) {
+            const session = startChargingSession('manual');
+            response = {
+              type: 'response',
+              command: 'start_charging',
+              success: true,
+              data: {
+                sessionId: session.sessionId,
+                startTime: session.startTime,
+                message: 'Charging started successfully'
+              },
+              timestamp: new Date().toISOString()
+            };
+            console.log('📱 Command: Start charging (v2.1)');
+          } else {
+            response = {
+              type: 'response',
+              command: 'start_charging',
+              success: false,
+              error: 'Device is already charging',
+              timestamp: new Date().toISOString()
+            };
+          }
+        }
+        // Legacy support
+        else if (!deviceState.isCharging) {
+          const session = startChargingSession('manual');
+          response = { 
+            ack: true, 
+            msg: 'Charging started',
+            session: session
+          };
+          console.log('📱 Command: Start charging');
+        } else {
+          response = { ack: false, msg: 'Already charging' };
+        }
+        break;
         
+      case 'stop':
+        // New protocol v2.1 - action commands
+        if (command.type === 'action' && command.command === 'stop_charging') {
+          if (deviceState.isCharging) {
+            const session = stopChargingSession('Manual stop via WebSocket');
+            response = {
+              type: 'response',
+              command: 'stop_charging',
+              success: true,
+              data: {
+                sessionId: session.sessionId,
+                endTime: session.endTime,
+                energyConsumed: session.energyConsumed,
+                duration: session.duration,
+                message: 'Charging stopped successfully'
+              },
+              timestamp: new Date().toISOString()
+            };
+            console.log('📱 Command: Stop charging (v2.1)');
+          } else {
+            response = {
+              type: 'response',
+              command: 'stop_charging',
+              success: false,
+              error: 'Device is not charging',
+              timestamp: new Date().toISOString()
+            };
+          }
+        }
+        // Legacy support
+        else if (deviceState.isCharging) {
+          const session = stopChargingSession('Manual stop via WebSocket');
+          response = { 
+            ack: true, 
+            msg: 'Charging stopped',
+            session: session
+          };
+          console.log('📱 Command: Stop charging');
+        } else {
+          response = { ack: false, msg: 'Not charging' };
+        }
+        break;
+        
+      case 'set_limitA':
+        if (command.value && command.value >= 6 && command.value <= 16) {
+          deviceState.limitA = command.value;
+          response = { ack: true, msg: `Limit set to ${command.value}A` };
+          console.log(`📱 Command: Set limit to ${command.value}A`);
+        } else {
+          response = { ack: false, msg: 'Invalid limit (must be 6-16A)' };
+        }
+        break;
+        
+      case 'reset_energy':
+        deviceState.energyKWh = 0;
+        deviceState.sessionStartEnergy = 0;
+        response = { ack: true, msg: 'Energy counter reset' };
+        console.log('📱 Command: Reset energy counter');
+        break;
+        
+      // RFID Commands - New Protocol v2.1
       case 'add_rfid':
-        if (command.data && command.data.id) {
-          const result = addRFID({
-            id: command.data.id,
-            userId: command.data.userId || 'unknown'
-          });
-          response = {
-            type: 'response',
-            command: 'add_rfid',
-            success: result.success,
-            data: result.success ? { id: command.data.id, message: result.msg } : null,
-            error: result.success ? null : result.msg,
-            timestamp: new Date().toISOString()
+        if (command.type === 'config' && command.command === 'add_rfid') {
+          if (command.data && command.data.id) {
+            const result = addRFID({
+              id: command.data.id,
+              userId: command.data.userId || 'unknown',
+              label: command.data.label || 'Unnamed RFID'
+            });
+            response = {
+              type: 'response',
+              command: 'add_rfid',
+              success: result.success,
+              data: result.success ? {
+                id: command.data.id,
+                message: result.msg
+              } : null,
+              error: result.success ? null : result.msg,
+              timestamp: new Date().toISOString()
+            };
+          } else {
+            response = {
+              type: 'response',
+              command: 'add_rfid',
+              success: false,
+              error: 'Invalid RFID data - id required',
+              timestamp: new Date().toISOString()
+            };
+          }
+        }
+        // Legacy support
+        else if (command.rfid && command.rfid.rfidId) {
+          const result = addRFID(command.rfid);
+          response = { 
+            ack: result.success, 
+            msg: result.msg,
+            rfidId: command.rfid.rfidId 
           };
         } else {
-          response = {
-            type: 'response',
-            command: 'add_rfid',
-            success: false,
-            error: 'Invalid RFID data - id required',
-            timestamp: new Date().toISOString()
-          };
+          response = { ack: false, msg: 'Invalid RFID data' };
         }
         break;
         
       case 'delete_rfid':
-        if (command.data && command.data.id) {
-          const result = deleteRFID(command.data.id);
-          response = {
-            type: 'response',
-            command: 'delete_rfid',
-            success: result.success,
-            data: result.success ? { id: command.data.id, message: result.msg } : null,
-            error: result.success ? null : result.msg,
-            timestamp: new Date().toISOString()
-          };
-        } else {
-          response = {
-            type: 'response',
-            command: 'delete_rfid',
-            success: false,
-            error: 'RFID ID required',
-            timestamp: new Date().toISOString()
-          };
-        }
-        break;
-        
-      case 'fastCharging':
-        if (command.data && typeof command.data.value === 'boolean') {
-          deviceSettings.fastCharging = command.data.value;
-          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          
-          response = {
-            type: 'response',
-            command: 'fastCharging',
-            success: true,
-            data: {
-              value: command.data.value,
-              message: 'Fast charging setting updated'
-            },
-            timestamp: new Date().toISOString()
-          };
-          console.log(`⚡ Fast charging ${command.data.value ? 'enabled' : 'disabled'}`);
-        } else {
-          response = {
-            type: 'response',
-            command: 'fastCharging',
-            success: false,
-            error: 'Invalid fastCharging value - boolean required',
-            timestamp: new Date().toISOString()
-          };
-        }
-        break;
-        
-      case 'autoPlug':
-        if (command.data && typeof command.data.value === 'boolean') {
-          deviceSettings.autoPlug = command.data.value;
-          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          
-          response = {
-            type: 'response',
-            command: 'autoPlug',
-            success: true,
-            data: {
-              value: command.data.value,
-              message: 'Auto plug setting updated'
-            },
-            timestamp: new Date().toISOString()
-          };
-          console.log(`🔌 Auto plug ${command.data.value ? 'enabled' : 'disabled'}`);
-        } else {
-          response = {
-            type: 'response',
-            command: 'autoPlug',
-            success: false,
-            error: 'Invalid autoPlug value - boolean required',
-            timestamp: new Date().toISOString()
-          };
-        }
-        break;
-        
-      case 'language':
-        if (command.data && typeof command.data.value === 'string') {
-          deviceSettings.language = command.data.value;
-          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          
-          response = {
-            type: 'response',
-            command: 'language',
-            success: true,
-            data: {
-              value: command.data.value,
-              message: 'Language setting updated'
-            },
-            timestamp: new Date().toISOString()
-          };
-          console.log(`🌐 Language set to: ${command.data.value}`);
-        } else {
-          response = {
-            type: 'response',
-            command: 'language',
-            success: false,
+        if (command.type === 'config' && command.command === 'delete_rfid') {
+          if (command.data && command.data.id) {
+            const result = deleteRFID(command.data.id);
+            response = {
+              type: 'response',
+              command: 'delete_rfid',
+              success: result.success,
+              data: result.success ? {
+                id: command.data.id,
+                message: result.msg
+              } : null,
+              error: result.success ? null : result.msg,
               timestamp: new Date().toISOString()
-          };
+            };
+          } else {
+            response = {
+              type: 'response',
+              command: 'delete_rfid',
+              success: false,
+              error: 'RFID ID required',
+              timestamp: new Date().toISOString()
+            };
+          }
         }
-        break;
-        
-      case 'setTime':
-        if (command.data && command.data.year && command.data.month && command.data.day && 
-            command.data.hour !== undefined && command.data.minute !== undefined && command.data.second !== undefined) {
-          
-          // Store the device time settings
-          deviceSettings.deviceTime = {
-            year: command.data.year,
-            month: command.data.month,
-            day: command.data.day,
-            hour: command.data.hour,
-            minute: command.data.minute,
-            second: command.data.second,
-            setAt: new Date().toISOString()
+        // Legacy support
+        else if (command.rfidId) {
+          const result = deleteRFID(command.rfidId);
+          response = { 
+            ack: result.success, 
+            msg: result.msg,
+            rfidId: command.rfidId 
           };
-          
-          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          
-          response = {
-            type: 'response',
-            command: 'setTime',
-            success: true,
-            data: {
-              message: 'Device time set successfully',
-              setTime: `${command.data.year}-${command.data.month.toString().padStart(2,'0')}-${command.data.day.toString().padStart(2,'0')} ${command.data.hour.toString().padStart(2,'0')}:${command.data.minute.toString().padStart(2,'0')}:${command.data.second.toString().padStart(2,'0')}`
-            },
-            timestamp: new Date().toISOString()
-          };
-          console.log(`🕒 Device time set to: ${command.data.year}-${command.data.month.toString().padStart(2,'0')}-${command.data.day.toString().padStart(2,'0')} ${command.data.hour.toString().padStart(2,'0')}:${command.data.minute.toString().padStart(2,'0')}:${command.data.second.toString().padStart(2,'0')}`);
         } else {
-          response = {
-            type: 'response',
-            command: 'setTime',
-            success: false,
-            error: 'Invalid time data - year, month, day, hour, minute, second required',
-            timestamp: new Date().toISOString()
-          };
+          response = { ack: false, msg: 'RFID ID required' };
         }
         break;
         
-      case 'set_limitTime':
-        if (command.data && typeof command.data.value === 'number' && command.data.value > 0 && command.data.value <= 24) {
-          deviceSettings.limitTimeHours = command.data.value;
-          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          
-          response = {
-            type: 'response',
-            command: 'set_limitTime',
-            success: true,
-            data: {
-              value: command.data.value,
-              message: 'Charging time limit set successfully'
-            },
-            timestamp: new Date().toISOString()
-          };
-          console.log(`⏰ Charging time limit set to: ${command.data.value} hours`);
-        } else {
-          response = {
-            type: 'response',
-            command: 'set_limitTime',
-            success: false,
-            error: 'Invalid time limit (must be 1-24 hours)',
-            timestamp: new Date().toISOString()
-          };
-        }
-        break;
-        
-      default:
-        response = {
-          type: 'response',
-          command: command.command,
-          success: false,
-          error: 'Unknown config command',
-          timestamp: new Date().toISOString()
+      case 'list_rfids':
+        // Send detailed RFID list as separate event
+        const rfidListEvent = {
+          event: 'rfid_list',
+          rfids: rfids,
+          count: rfids.length,
+          currentRFID: deviceState.currentRFID,
+          charging: deviceState.isCharging,
+          timestamp: Math.floor(Date.now() / 1000)
         };
-    }
-  }
-  
-  // Action commands
-  else if (command.type === 'action') {
-    switch (command.command) {
-      case 'start_charging':
-        if (!deviceState.isCharging) {
-          const session = startChargingSession('manual');
-          response = {
-            type: 'response',
-            command: 'start_charging',
-            success: true,
-            data: {
-              sessionId: session.sessionId,
-              startTime: session.startAt,
-              message: 'Charging started successfully'
-            },
-            timestamp: new Date().toISOString()
-          };
-          console.log('� Command: Start charging (v2.1)');
-        } else {
-          response = {
-            type: 'response',
-            command: 'start_charging',
-            success: false,
-            error: 'Device is already charging',
-            timestamp: new Date().toISOString()
-          };
-        }
+        ws.send(JSON.stringify(rfidListEvent));
+        response = { ack: true, msg: `Sent ${rfids.length} RFIDs` };
         break;
-        
-      case 'stop_charging':
-        if (deviceState.isCharging) {
-          const session = stopChargingSession('Manual stop via WebSocket');
-          response = {
-            type: 'response',
-            command: 'stop_charging',
-            success: true,
-            data: {
-              sessionId: session.sessionId,
-              endTime: session.endAt,
-              energyConsumed: deviceState.energykW,
-              message: 'Charging stopped successfully'
-            },
-            timestamp: new Date().toISOString()
-          };
-          console.log('📱 Command: Stop charging (v2.1)');
-        } else {
-          response = {
-            type: 'response',
-            command: 'stop_charging',
-            success: false,
-            error: 'Device is not charging',
-            timestamp: new Date().toISOString()
-          };
-        }
-        break;
-        
-      default:
-        response = {
-          type: 'response',
-          command: command.command,
-          success: false,
-          error: 'Unknown action command',
-          timestamp: new Date().toISOString()
+
+      // Session Management Commands
+      case 'get_sessions':
+        const limit = command.limit || 50;
+        const sessionHistoryEvent = {
+          event: 'session_history',
+          sessions: getSessionHistory(limit),
+          activeSession: getActiveSession(),
+          totalSessions: chargingSessions.length,
+          timestamp: Math.floor(Date.now() / 1000)
         };
-    }
-  }
-  
-  // Event handling
-  else if (command.type === 'event') {
-    switch (command.event) {
-      case 'rfid_tap':
-        if (command.data && command.data.id) {
-          const tapResult = tapRFID(command.data.id);
-          
-          // Broadcast RFID tap event to all clients
-          const tapEvent = {
-            type: 'event',
-            event: 'rfid_tap',
-            data: {
-              id: command.data.id,
+        ws.send(JSON.stringify(sessionHistoryEvent));
+        response = { ack: true, msg: `Sent ${chargingSessions.length} sessions` };
+        break;
+
+      case 'get_unsynced_sessions':
+        const unsynced = chargingSessions.filter(s => s.unsynced === true);
+        ws.send(JSON.stringify({
+          event: 'unsynced_sessions',
+          sessions: unsynced,
+          count: unsynced.length,
+          timestamp: Math.floor(Date.now() / 1000)
+        }));
+        response = { ack: true, msg: `Sent ${unsynced.length} unsynced sessions` };
+        break;
+
+      case 'ack_sessions_synced':
+        if (Array.isArray(command.sessionIds)) {
+          let updated = 0;
+          chargingSessions.forEach(s => {
+            if (command.sessionIds.includes(s.sessionId)) {
+              if (s.unsynced) { s.unsynced = false; updated++; }
+            }
+          });
+          saveJSON(SESSIONS_FILE, chargingSessions);
+          response = { ack: true, msg: `Acknowledged ${updated} sessions` };
+        } else {
+          response = { ack: false, msg: 'sessionIds array required' };
+        }
+        break;
+
+      case 'get_active_session':
+        const activeSession = getActiveSession();
+        if (activeSession) {
+          ws.send(JSON.stringify({
+            event: 'active_session',
+            session: activeSession,
+            timestamp: Math.floor(Date.now() / 1000)
+          }));
+          response = { ack: true, msg: 'Active session sent' };
+        } else {
+          response = { ack: false, msg: 'No active session' };
+        }
+        break;
+
+      // RFID Tap Simulation
+      case 'tap_rfid':
+        // New protocol v2.1 - RFID tap event
+        if (command.type === 'event' && command.event === 'rfid_tap') {
+          if (command.data && command.data.id) {
+            const tapResult = tapRFID(command.data.id);
+            // Broadcast RFID tap event to all clients
+            const tapEvent = {
+              type: 'event',
+              event: 'rfid_tap',
+              data: {
+                id: command.data.id,
+                success: tapResult.success,
+                message: tapResult.msg,
+                sessionId: tapResult.session ? tapResult.session.sessionId : null,
+                charging: deviceState.isCharging
+              },
+              timestamp: new Date().toISOString()
+            };
+            broadcastToClients(tapEvent);
+            
+            response = {
+              type: 'response',
+              command: 'rfid_tap',
               success: tapResult.success,
-              message: tapResult.msg,
-              sessionId: tapResult.session ? tapResult.session.sessionId : null,
-              charging: deviceState.isCharging
-            },
-            timestamp: new Date().toISOString()
-          };
-          broadcastToClients(tapEvent);
-          
+              data: {
+                id: command.data.id,
+                message: tapResult.msg,
+                sessionId: tapResult.session ? tapResult.session.sessionId : null
+              },
+              timestamp: new Date().toISOString()
+            };
+          } else {
+            response = {
+              type: 'response',
+              command: 'rfid_tap',
+              success: false,
+              error: 'RFID ID required',
+              timestamp: new Date().toISOString()
+            };
+          }
+        }
+        // Legacy support
+        else if (command.rfidId) {
+          const tapResult = tapRFID(command.rfidId);
           response = {
-            type: 'response',
-            command: 'rfid_tap',
-            success: tapResult.success,
-            data: {
-              id: command.data.id,
-              message: tapResult.msg,
-              sessionId: tapResult.session ? tapResult.session.sessionId : null
-            },
-            timestamp: new Date().toISOString()
+            ack: tapResult.success,
+            msg: tapResult.msg,
+            rfidId: command.rfidId,
+            session: tapResult.session || null
           };
         } else {
-          response = {
-            type: 'response',
-            command: 'rfid_tap',
-            success: false,
-            error: 'RFID ID required',
-            timestamp: new Date().toISOString()
-          };
+          response = { ack: false, msg: 'RFID ID required' };
         }
         break;
         
-      default:
+      case 'sync_rfids':
+      case 'set_rfids':
+        // Bulk sync RFIDs from Firestore/App
+        {
+          const incomingRFIDs = (command.rfids && Array.isArray(command.rfids))
+            ? command.rfids
+            : (command.data && Array.isArray(command.data.rfids))
+              ? command.data.rfids
+              : null;
+          if (!incomingRFIDs) {
+            response = { ack: false, msg: 'Invalid RFID array for sync (expected rfids[] or data.rfids[])' };
+            break;
+          }
+          const result = syncRFIDs(incomingRFIDs);
+          response = { 
+            ack: result.success, 
+            msg: result.msg,
+            count: rfids.length,
+            rfids: rfids.map(r => `${r.rfidId} (${r.label})`)
+          };
+          console.log(`📱 Command: Sync ${rfids.length} RFIDs from Flutter app`);
+          
+          // Broadcast RFID list update to all clients (including dashboard)
+          if (result.success) {
+            broadcastToClients({
+              event: 'rfid_list',
+              rfids: rfids,
+              count: rfids.length,
+              timestamp: Math.floor(Date.now() / 1000)
+            });
+          }
+        }
+        break;
+        
+      case 'get_rfids':
+        // Get all RFIDs
         response = {
-          type: 'response',
-          command: command.event,
-          success: false,
-          error: 'Unknown event type',
-          timestamp: new Date().toISOString()
+          ack: true,
+          msg: 'RFID list',
+          rfids: rfids,
+          count: rfids.length
         };
+        console.log(`📱 Command: Get ${rfids.length} RFIDs`);
+        break;
+        
+      case 'get_status':
+        // Get detailed device status including RFIDs
+        response = {
+          ack: true,
+          msg: 'Device status',
+          status: {
+            deviceId: config.deviceId,
+            charging: deviceState.isCharging,
+            energyKWh: deviceState.energyKWh,
+            currentRFID: deviceState.currentRFID,
+            connectedClients: deviceState.connectedClients.size,
+            rfidCount: rfids.length,
+            rfids: rfids,
+            timestamp: Math.floor(Date.now() / 1000)
+          }
+        };
+        break;
+        
+      default:
+        response = { ack: false, msg: `Unknown action: ${action}` };
     }
+    
+    ws.send(JSON.stringify(response));
+    
+    // Broadcast updated telemetry after command to reflect any state changes
+    setTimeout(() => {
+      broadcastToClients(generateTelemetry());
+    }, 50);
+    
+  } catch (error) {
+    console.error('❌ Error parsing command:', error.message);
+    ws.send(JSON.stringify({ ack: false, msg: 'Invalid JSON command' }));
   }
-  
-  // Unknown command type
-  else {
-    response = {
-      type: 'response',
-      command: command.command || 'unknown',
-      success: false,
-      error: 'Unknown command type',
-      timestamp: new Date().toISOString()
-    };
-  }
-  
-  console.log(`📤 Sending response: ${JSON.stringify(response)}`);
-  ws.send(JSON.stringify(response));
 }
 
-// Main startup
 // Main startup
 async function startServer() {
   try {
@@ -1555,17 +1147,6 @@ async function startServer() {
       console.log(`🔍 Also available on: ws://localhost:${config.port}`);
     }
     console.log(`🌐 HTTP Server: http://${deviceIP}:${config.httpPort}`);
-
-    // Create real WiFi hotspot if in hotspot mode
-    if (isHotspotMode) {
-      const hotspotCreated = await wifiHotspot.createWindowsHotspot();
-      if (hotspotCreated) {
-        // Update device IP to hotspot IP
-        const hotspotInfo = wifiHotspot.getConnectionInfo();
-        deviceIP = hotspotInfo.ip;
-        console.log(`📡 Real hotspot active - Updated device IP: ${deviceIP}`);
-      }
-    }
 
     // Create WebSocket server
     const wss = new WebSocket.Server({ 
@@ -1811,7 +1392,7 @@ async function startServer() {
         } else {
           clearInterval(telemetryInterval);
         }
-      }, 1000); // WiseCar app expects telemetry every 1 second
+      }, 5000);
       
       // Handle incoming messages
       ws.on('message', (message) => {
@@ -1841,11 +1422,6 @@ async function startServer() {
     // Graceful shutdown
     process.on('SIGINT', () => {
       console.log('\n🛑 Shutting down WiseCar Charger Simulator...');
-      
-      // Stop WiFi hotspot if active
-      if (wifiHotspot.isActive) {
-        wifiHotspot.stopHotspot();
-      }
       
       if (mdnsService) {
         mdnsService.stop();
@@ -1896,7 +1472,6 @@ async function startServer() {
     process.exit(1);
   }
 }
-
 
 // Start the server
 startServer();

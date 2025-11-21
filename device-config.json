@@ -1,0 +1,22 @@
+{
+  "deviceInfo": {
+    "model": "WTL-22KW",
+    "serial": "202501234567",
+    "firmwareESP": "1.2.3",
+    "firmwareSTM": "1.2.3",
+    "hardware": "4.1"
+  },
+  "deviceSettings": {
+    "rfidSupported": true,
+    "autoPlug": true,
+    "fastCharging": false,
+    "language": "en",
+    "limitA": 16
+  },
+  "networkConfig": {
+    "mode": "hotspot",
+    "ssid": null,
+    "password": null,
+    "local": false
+  }
+}

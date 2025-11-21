@@ -32,21 +32,33 @@ app.get('/api/status', (req, res) => {
     });
   };
   
-  Promise.all([
-    checkPort(3000), // Wi-Fi mode
-    checkPort(3001)  // Hotspot mode
-  ]).then(([wifiRunning, hotspotRunning]) => {
+  // Always use hotspot mode (config persistence disabled for testing)
+  let networkConfig = { mode: 'hotspot', ssid: null, password: null };
+  // DISABLED: Reading saved network config
+  // try {
+  //   if (fs.existsSync(path.join(__dirname, 'network-config.json'))) {
+  //     const configData = fs.readFileSync(path.join(__dirname, 'network-config.json'), 'utf-8');
+  //     networkConfig = JSON.parse(configData);
+  //   }
+  // } catch (error) {
+  //   console.log('Could not read network config:', error.message);
+  // }
+  
+  // Always use hotspot mode IP
+  const deviceIP = '192.168.1.10';
+  const wsPort = 3000;
+  const httpPort = 3002;
+  
+  checkPort(wsPort).then(running => {
     res.json({
-      wifiMode: {
-        running: wifiRunning,
-        port: 3000,
-        url: `ws://localhost:3000`
-      },
-      hotspotMode: {
-        running: hotspotRunning,
-        port: 3001,
-        url: `ws://localhost:3001`
-      },
+      running: running,
+      networkConfig: networkConfig,
+      deviceIP: deviceIP,
+      wsPort: wsPort,
+      httpPort: httpPort,
+      wsUrl: `ws://${deviceIP}:${wsPort}`,
+      httpUrl: `http://${deviceIP}:${httpPort}`,
+      isHotspot: networkConfig.mode === 'hotspot',
       timestamp: Date.now()
     });
   });

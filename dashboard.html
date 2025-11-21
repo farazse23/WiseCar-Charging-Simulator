@@ -352,34 +352,45 @@
         </div>
 
         <div class="dashboard">
-            <!-- Wi-Fi Mode Server -->
+            <!-- Network Mode & Connection Info -->
             <div class="card">
                 <div class="card-header">
                     <div class="card-title">📡 WiseCar Charger Simulator</div>
-                    <div id="wifi-status" class="status-badge status-stopped">Stopped</div>
+                    <div id="server-status" class="status-badge status-stopped">Stopped</div>
                 </div>
                 <div class="server-info">
+                    <div class="info-item" style="grid-column: 1 / -1;">
+                        <div class="info-label">Network Mode</div>
+                        <div class="info-value" id="network-mode">
+                            <span id="mode-icon">📡</span> 
+                            <span id="mode-text">Unknown</span>
+                        </div>
+                    </div>
                     <div class="info-item">
-                        <div class="info-label">Port</div>
-                        <div class="info-value" id="wifi-port">3000</div>
+                        <div class="info-label">Device IP</div>
+                        <div class="info-value" id="device-ip">-</div>
+                    </div>
+                    <div class="info-item">
+                        <div class="info-label">WebSocket Port</div>
+                        <div class="info-value" id="ws-port">3000</div>
                     </div>
                     <div class="info-item">
                         <div class="info-label">WebSocket URL</div>
-                        <div class="info-value" id="wifi-url">ws://localhost:3000</div>
+                        <div class="info-value" id="ws-url">-</div>
                     </div>
                     <div class="info-item">
-                        <div class="info-label">mDNS Service</div>
-                        <div class="info-value" id="mdns-service">wisecharger-mock.local</div>
-                    </div>
-                    <div class="info-item">
-                        <div class="info-label">Device ID</div>
-                        <div class="info-value">device_mock_001</div>
+                        <div class="info-label">HTTP API Port</div>
+                        <div class="info-value" id="http-port">3002</div>
                     </div>
                 </div>
+                <div id="connection-instructions" style="margin: 15px 0; padding: 15px; background: #e7f3ff; border-left: 4px solid #2196F3; border-radius: 6px; display: none;">
+                    <div style="font-weight: 600; color: #1976D2; margin-bottom: 8px;">📱 Connection Instructions:</div>
+                    <div id="instructions-content" style="color: #555; font-size: 0.9rem; line-height: 1.5;"></div>
+                </div>
                 <div class="controls">
-                    <button class="button success" id="start-wifi" onclick="startServer()">Start Server</button>
-                    <button class="button" id="connect-wifi" onclick="connectToServer()" disabled>Connect & Test</button>
-                    <button class="button danger" id="disconnect-wifi" onclick="disconnectFromServer()" disabled>Disconnect</button>
+                    <button class="button success" id="start-server" onclick="startServer()">Start Server</button>
+                    <button class="button" id="connect-server" onclick="connectToServer()" disabled>Connect & Test</button>
+                    <button class="button danger" id="disconnect-server" onclick="disconnectFromServer()" disabled>Disconnect</button>
                 </div>
             </div>
 
@@ -509,21 +520,68 @@
                 .then(response => response.json())
                 .then(data => {
                     // Update server status
-                    const wifiStatus = document.getElementById('wifi-status');
-                    const wifiConnect = document.getElementById('connect-wifi');
-                    if (data.wifiMode.running) {
-                        wifiStatus.textContent = 'Running';
-                        wifiStatus.className = 'status-badge status-running';
-                        wifiConnect.disabled = false;
-                        
-                        // Update port and URL info
-                        const actualPort = data.wifiMode.port || 3000;
-                        document.getElementById('wifi-port').textContent = actualPort;
-                        document.getElementById('wifi-url').textContent = `ws://localhost:${actualPort}`;
+                    const serverStatus = document.getElementById('server-status');
+                    const connectBtn = document.getElementById('connect-server');
+                    
+                    if (data.running) {
+                        serverStatus.textContent = 'Running';
+                        serverStatus.className = 'status-badge status-running';
+                        connectBtn.disabled = false;
                     } else {
-                        wifiStatus.textContent = 'Stopped';
-                        wifiStatus.className = 'status-badge status-stopped';
-                        wifiConnect.disabled = true;
+                        serverStatus.textContent = 'Stopped';
+                        serverStatus.className = 'status-badge status-stopped';
+                        connectBtn.disabled = true;
+                    }
+                    
+                    // Update network mode display
+                    const modeIcon = document.getElementById('mode-icon');
+                    const modeText = document.getElementById('mode-text');
+                    const instructionsDiv = document.getElementById('connection-instructions');
+                    const instructionsContent = document.getElementById('instructions-content');
+                    
+                    if (data.networkConfig) {
+                        const isHotspot = data.networkConfig.mode === 'hotspot';
+                        
+                        // Update mode display
+                        if (isHotspot) {
+                            modeIcon.textContent = '📡';
+                            modeText.textContent = 'AP (Hotspot Mode)';
+                            modeText.style.color = '#ff6b6b';
+                        } else {
+                            modeIcon.textContent = '🌐';
+                            modeText.textContent = `Wi-Fi (${data.networkConfig.ssid || 'LAN'})`;
+                            modeText.style.color = '#51cf66';
+                        }
+                        
+                        // Update IP and URLs
+                        document.getElementById('device-ip').textContent = data.deviceIP;
+                        document.getElementById('ws-port').textContent = data.wsPort;
+                        document.getElementById('http-port').textContent = data.httpPort;
+                        document.getElementById('ws-url').textContent = data.wsUrl;
+                        
+                        // Show connection instructions
+                        if (data.running) {
+                            instructionsDiv.style.display = 'block';
+                            if (isHotspot) {
+                                instructionsContent.innerHTML = `
+                                    <strong>Hotspot Mode (AP):</strong><br>
+                                    1. Connect your phone/tablet to Wi-Fi network: <strong>WiseCar-XXXX</strong><br>
+                                    2. Device IP is fixed at: <strong>${data.deviceIP}:${data.wsPort}</strong><br>
+                                    3. App should connect directly to this IP (no mDNS needed)<br>
+                                    4. Use this mode for first-time setup
+                                `;
+                            } else {
+                                instructionsContent.innerHTML = `
+                                    <strong>Wi-Fi Mode (LAN):</strong><br>
+                                    1. Ensure device is connected to: <strong>${data.networkConfig.ssid}</strong><br>
+                                    2. Device IP is dynamic: <strong>${data.deviceIP}:${data.wsPort}</strong><br>
+                                    3. App should discover device via mDNS: <strong>wisecharger-mock.local</strong><br>
+                                    4. Use this mode for normal operation
+                                `;
+                            }
+                        } else {
+                            instructionsDiv.style.display = 'none';
+                        }
                     }
                 })
                 .catch(error => {
@@ -542,14 +600,13 @@
                 ws.close();
             }
 
-            // Try to get the actual port from the display, fallback to 3000
-            const portText = document.getElementById('wifi-port').textContent;
-            const port = portText || '3000';
+            // Get connection info from the status display
+            const wsUrl = document.getElementById('ws-url').textContent;
+            const deviceIP = document.getElementById('device-ip').textContent;
+            const port = document.getElementById('ws-port').textContent;
             
-            // Use the same host as the current page (dashboard)
-            const host = window.location.hostname || 'localhost';
-            const url = `ws://${host}:${port}`;
-            currentServerMode = 'wifi';
+            // Build WebSocket URL
+            const url = wsUrl !== '-' ? wsUrl : `ws://${deviceIP}:${port}`;
             
             log(`Connecting to server: ${url}`);
             
@@ -564,8 +621,8 @@
                 ['btn-start', 'btn-stop', 'btn-limit', 'btn-reset'].forEach(id => {
                     document.getElementById(id).disabled = false;
                 });
-                document.getElementById('disconnect-wifi').disabled = false;
-                document.getElementById('connect-wifi').disabled = true;
+                document.getElementById('disconnect-server').disabled = false;
+                document.getElementById('connect-server').disabled = true;
                 
                 // Enable RFID controls
                 enableRFIDControls();
@@ -631,8 +688,8 @@
                 ['btn-start', 'btn-stop', 'btn-limit', 'btn-reset'].forEach(id => {
                     document.getElementById(id).disabled = true;
                 });
-                document.getElementById('disconnect-wifi').disabled = true;
-                document.getElementById('connect-wifi').disabled = false;
+                document.getElementById('disconnect-server').disabled = true;
+                document.getElementById('connect-server').disabled = false;
                 
                 // Disable RFID controls
                 disableRFIDControls();
