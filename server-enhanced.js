@@ -72,7 +72,8 @@ let chargingSessions = []; // Store all sessions
 //   startAt: "2025-11-06T18:00:00.000Z", // ISO format
 //   endAt: "2025-11-06T19:00:00.000Z" | null, // ISO format or null
 //   energykW: 56.35, // floating point in kW (session energy)
-//   rfidId: "123456789" | null // RFID ID or null for manual
+//   rfidId: "123456789" | null, // RFID ID or null for manual
+//   unsynced: true // flag to track if session needs to be synced with app
 // }
 
 // RFID management - new protocol structure
@@ -494,6 +495,97 @@ function generateSessionId() {
   return `session_${paddedNumber}`;
 }
 
+// Test function to create sample sessions for testing unsynced functionality
+function createTestSessions() {
+  const testSessions = [
+    {
+      sessionId: "session_000000001",
+      sessionStatus: "completed",
+      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
+      startAt: "2025-11-08T09:00:00.000Z",
+      endAt: "2025-11-08T09:30:00.000Z",
+      energykW: 5.25,
+      rfidId: "RFID#123456",
+      unsynced: true
+    },
+    {
+      sessionId: "session_000000002",
+      sessionStatus: "completed",
+      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
+      startAt: "2025-11-08T10:00:00.000Z",
+      endAt: "2025-11-08T10:45:00.000Z",
+      energykW: 7.80,
+      rfidId: null,
+      unsynced: true
+    },
+    {
+      sessionId: "session_000000003",
+      sessionStatus: "completed",
+      sessionUserId: "user_test123",
+      startAt: "2025-11-08T11:00:00.000Z",
+      endAt: "2025-11-08T12:15:00.000Z",
+      energykW: 12.45,
+      rfidId: "RFID#789012",
+      unsynced: true
+    },
+    {
+      sessionId: "session_000000004",
+      sessionStatus: "completed",
+      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
+      startAt: "2025-11-08T13:00:00.000Z",
+      endAt: "2025-11-08T14:30:00.000Z",
+      energykW: 15.20,
+      rfidId: null,
+      unsynced: true
+    },
+    {
+      sessionId: "session_000000005",
+      sessionStatus: "completed",
+      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
+      startAt: "2025-11-08T15:00:00.000Z",
+      endAt: "2025-11-08T16:00:00.000Z",
+      energykW: 8.75,
+      rfidId: "RFID#345678",
+      unsynced: true
+    },
+    {
+      sessionId: "session_000000006",
+      sessionStatus: "completed",
+      sessionUserId: "user_test456",
+      startAt: "2025-11-08T17:00:00.000Z",
+      endAt: "2025-11-08T18:30:00.000Z",
+      energykW: 18.90,
+      rfidId: null,
+      unsynced: true
+    },
+    {
+      sessionId: "session_000000007",
+      sessionStatus: "completed",
+      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
+      startAt: "2025-11-08T19:00:00.000Z",
+      endAt: "2025-11-08T20:45:00.000Z",
+      energykW: 22.30,
+      rfidId: "RFID#901234",
+      unsynced: true
+    }
+  ];
+  
+  // Add test sessions to the array, updating sessionCounter
+  testSessions.forEach(session => {
+    chargingSessions.push(session);
+    const sessionNum = parseInt(session.sessionId.split('_')[1]);
+    if (sessionNum >= sessionCounter) {
+      sessionCounter = sessionNum + 1;
+    }
+  });
+  
+  console.log(`🧪 Created ${testSessions.length} test sessions for unsynced testing`);
+  console.log(`📊 Total sessions: ${chargingSessions.length}, Next session counter: ${sessionCounter}`);
+  
+  // Save to file
+  saveJSON(SESSIONS_FILE, chargingSessions);
+}
+
 function startChargingSession(userId = null, rfidId = null) {
   // Stop any existing session first
   if (currentSession) {
@@ -509,7 +601,8 @@ function startChargingSession(userId = null, rfidId = null) {
     startAt: now.toISOString(),
     endAt: null,
     energykW: 0, // Session energy starts at 0
-    rfidId: rfidId // RFID ID or null for manual
+    rfidId: rfidId, // RFID ID or null for manual
+    unsynced: true // Mark as unsynced initially
   };
   
   // Add to sessions array
@@ -1453,6 +1546,42 @@ function handleProtocolV21Command(ws, command) {
         }
         break;
         
+      case 'get_unsynced_sessions':
+        const unsyncedSessions = chargingSessions.filter(s => s.unsynced === true);
+        const batchSize = 5; // Send maximum 5 sessions at a time
+        const sessionsBatch = unsyncedSessions.slice(0, batchSize);
+        
+        response = {
+          type: 'response',
+          command: 'get_unsynced_sessions',
+          success: true,
+          data: {
+            sessions: sessionsBatch.map(session => ({
+              sessionId: session.sessionId,
+              startAt: session.startAt,
+              endAt: session.endAt,
+              energykW: session.energykW,
+              rfidId: session.rfidId
+            })),
+            count: sessionsBatch.length
+          },
+          timestamp: new Date().toISOString()
+        };
+        
+        // Mark the sent sessions as synced
+        sessionsBatch.forEach(session => {
+          const index = chargingSessions.findIndex(s => s.sessionId === session.sessionId);
+          if (index !== -1) {
+            chargingSessions[index].unsynced = false;
+          }
+        });
+        
+        // Save updated sessions to file
+        saveJSON(SESSIONS_FILE, chargingSessions);
+        
+        console.log(`📊 Command: Get unsynced sessions - Sent ${sessionsBatch.length} of ${unsyncedSessions.length} unsynced sessions`);
+        break;
+        
       default:
         response = {
           type: 'response',
@@ -1748,6 +1877,53 @@ async function startServer() {
         success: true, 
         message: 'Session stopped successfully',
         session: session
+      });
+    });
+
+    // Test session management endpoints
+    app.post('/test/create-sessions', (req, res) => {
+      createTestSessions();
+      const unsyncedCount = chargingSessions.filter(s => s.unsynced === true).length;
+      res.json({ 
+        success: true, 
+        message: 'Test sessions created successfully',
+        totalSessions: chargingSessions.length,
+        unsyncedSessions: unsyncedCount
+      });
+    });
+
+    app.post('/test/reset-unsynced', (req, res) => {
+      // Mark all sessions as unsynced for testing
+      chargingSessions.forEach(session => {
+        session.unsynced = true;
+      });
+      saveJSON(SESSIONS_FILE, chargingSessions);
+      
+      const unsyncedCount = chargingSessions.filter(s => s.unsynced === true).length;
+      res.json({ 
+        success: true, 
+        message: 'All sessions marked as unsynced',
+        totalSessions: chargingSessions.length,
+        unsyncedSessions: unsyncedCount
+      });
+    });
+
+    app.get('/test/sessions-status', (req, res) => {
+      const unsyncedCount = chargingSessions.filter(s => s.unsynced === true).length;
+      const syncedCount = chargingSessions.filter(s => s.unsynced === false).length;
+      
+      res.json({
+        success: true,
+        totalSessions: chargingSessions.length,
+        unsyncedSessions: unsyncedCount,
+        syncedSessions: syncedCount,
+        sessions: chargingSessions.map(s => ({
+          sessionId: s.sessionId,
+          energykW: s.energykW,
+          unsynced: s.unsynced,
+          startAt: s.startAt,
+          endAt: s.endAt
+        }))
       });
     });
 
