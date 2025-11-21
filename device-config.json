@@ -9,9 +9,18 @@
   "deviceSettings": {
     "rfidSupported": true,
     "autoPlug": true,
-    "fastCharging": false,
+    "fastCharging": true,
     "language": "en",
-    "limitA": 16
+    "limitA": 16,
+    "deviceTime": {
+      "year": 2025,
+      "month": 11,
+      "day": 21,
+      "hour": 23,
+      "minute": 44,
+      "second": 49,
+      "setAt": "2025-11-21T18:44:50.423Z"
+    }
   },
   "networkConfig": {
     "mode": "hotspot",

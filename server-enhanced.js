@@ -18,6 +18,22 @@ const config = {
   devMode: process.env.DEV_MODE === 'true' || process.argv.includes('--dev') // Development mode flag
 };
 
+// Server startup time for uptime calculation
+const serverStartTime = new Date();
+
+// Helper function to calculate uptime with seconds
+function getUptime() {
+  const now = new Date();
+  const uptimeMs = now - serverStartTime;
+  
+  const totalSeconds = Math.floor(uptimeMs / 1000);
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+  
+  return `${hours}h ${minutes}m ${seconds}s`;
+}
+
 // Device info structure matching new protocol
 const deviceInfo = {
   model: "WTL-22KW",
@@ -45,8 +61,8 @@ let deviceState = {
   phases: 1,
   temperatureC: 38,
   connectedClients: new Set(),
-  energykW: 0, // Current session energy
-  energyKWh: 0, // Total energy consumed (for logging)
+  energykW: 0, // Current session energy in kWh (for billing)
+  energyKWh: 0, // Total lifetime energy consumed (for logging)
   isCharging: false,
   currentRFID: null,
   sessionStartEnergy: 0
@@ -317,7 +333,7 @@ function generateTelemetry() {
       status: deviceState.status,
       voltageV: deviceState.voltageV,
       currentA: deviceState.currentA,
-      powerkWh: deviceState.powerkWh,
+      powerkW: (deviceState.currentA * deviceState.voltageV / 1000), // Instantaneous power in kW
       phases: deviceState.phases,
       temperatureC: deviceState.temperatureC,
       updatedAt: new Date().toISOString()
@@ -328,10 +344,22 @@ function generateTelemetry() {
       sessionUserId: currentSession.sessionUserId,
       startAt: currentSession.startAt, // WiseCar uses 'startAt' not 'start'
       endAt: currentSession.endAt,     // WiseCar uses 'endAt' not 'end'
-      energykW: deviceState.energykW,
+      energykWh: deviceState.energykW, // Accumulated energy in kWh for this session
       rfidId: currentSession.rfidId
     } : null
   };
+  
+  // Log detailed telemetry when charging
+  if (deviceState.isCharging && currentSession) {
+    console.log(`⚡ CHARGING TELEMETRY:`);
+    console.log(`   Session: ${currentSession.sessionId}`);
+    console.log(`   Status: ${deviceState.status}`);
+    console.log(`   Power: ${deviceState.currentA}A × ${deviceState.voltageV}V = ${(deviceState.currentA * deviceState.voltageV / 1000).toFixed(2)}kW`);
+    console.log(`   Session Energy: ${deviceState.energykW.toFixed(2)} kWh`);
+    console.log(`   Temperature: ${deviceState.temperatureC}°C`);
+    console.log(`   User: ${currentSession.sessionUserId || 'RFID: ' + currentSession.rfidId}`);
+    console.log(`   Duration: ${Math.floor((new Date() - new Date(currentSession.startAt)) / 60000)} minutes`);
+  }
   
   return telemetryMessage;
 }
@@ -1587,6 +1615,46 @@ function handleProtocolV21Command(ws, command) {
         console.log(`📊 Command: Get unsynced sessions - Sent ${sessionsBatch.length} of ${unsyncedSessions.length} unsynced sessions`);
         break;
         
+      case 'ping':
+        response = {
+          type: 'response',
+          command: 'ping',
+          success: true,
+          data: {
+            message: 'pong',
+            deviceStatus: 'connected'
+          },
+          timestamp: new Date().toISOString()
+        };
+        console.log('🏓 Command: Ping - Pong response sent');
+        break;
+        
+      case 'get_status':
+        response = {
+          type: 'response',
+          command: 'get_status',
+          success: true,
+          data: {
+            status: deviceState.status,
+            isCharging: deviceState.isCharging,
+            connectedClients: deviceState.connectedClients.size,
+            currentSession: currentSession ? {
+              sessionId: currentSession.sessionId,
+              sessionStatus: currentSession.sessionStatus,
+              sessionUserId: currentSession.sessionUserId,
+              startAt: currentSession.startAt,
+              endAt: currentSession.endAt,
+              energykWh: deviceState.energykW,
+              rfidId: currentSession.rfidId
+            } : null,
+            totalEnergy: deviceState.energyKWh,
+            uptime: getUptime()
+          },
+          timestamp: new Date().toISOString()
+        };
+        console.log('📊 Command: Get status - Device status sent');
+        break;
+        
       default:
         response = {
           type: 'response',
@@ -2046,6 +2114,11 @@ async function startServer() {
         if (ws.readyState === WebSocket.OPEN) {
           const telemetry = generateTelemetry();
           ws.send(JSON.stringify(telemetry));
+          
+          // Log telemetry structure periodically when charging (every 10 seconds)
+          if (deviceState.isCharging && Math.floor(Date.now() / 1000) % 10 === 0) {
+            console.log('📡 Telemetry sent to client:', JSON.stringify(telemetry, null, 2));
+          }
         } else {
           clearInterval(telemetryInterval);
         }
@@ -2102,8 +2175,16 @@ async function startServer() {
       const clients = deviceState.connectedClients.size;
       const status = deviceState.isCharging ? 'CHARGING' : 'IDLE';
       const rfidInfo = deviceState.currentRFID ? ` | RFID: ${deviceState.currentRFID}` : '';
-      console.log(`📊 Status: ${status} | Clients: ${clients} | Energy: ${deviceState.energyKWh.toFixed(2)} kWh${rfidInfo}`);
-    }, 30000);
+      
+      if (deviceState.isCharging && currentSession) {
+        // Detailed charging status
+        const duration = Math.floor((new Date() - new Date(currentSession.startAt)) / 60000);
+        const power = (deviceState.currentA * deviceState.voltageV / 1000).toFixed(2);
+        console.log(`⚡ CHARGING: Session ${currentSession.sessionId} | ${duration}min | ${power}kW | Energy: ${deviceState.energykW.toFixed(2)}kWh | Clients: ${clients}${rfidInfo}`);
+      } else {
+        console.log(`📊 Status: ${status} | Clients: ${clients} | Total Energy: ${deviceState.energyKWh.toFixed(2)} kWh${rfidInfo}`);
+      }
+    }, 10000); // More frequent updates during charging
 
     console.log('✅ WiseCar Charger Simulator with RFID ready for connections!');
     console.log('💡 Usage:');
