@@ -14,7 +14,8 @@ const config = {
   port: process.env.PORT || 3000,
   httpPort: process.env.HTTP_PORT || 3002,
   deviceId: 'wtl-202501234567', // model-serial format
-  serviceName: '_wisecar._tcp.local'
+  serviceName: '_wisecar._tcp.local',
+  devMode: process.env.DEV_MODE === 'true' || process.argv.includes('--dev') // Development mode flag
 };
 
 // Device info structure matching new protocol
@@ -177,7 +178,11 @@ function saveJSON(filePath, value) {
 // Get device IP based on mode
 function getDeviceIP() {
   if (networkConfig.mode === 'hotspot') {
-    return '192.168.1.10'; // Fixed IP for AP mode
+    // In development mode, use localhost, in production use charger IP
+    if (config.devMode) {
+      return 'localhost';
+    }
+    return '192.168.1.10'; // Fixed IP for AP mode - real chargers use this IP
   }
   return getLocalIP(); // Dynamic IP in Wi-Fi mode
 }
@@ -1925,6 +1930,63 @@ async function startServer() {
           endAt: s.endAt
         }))
       });
+    });
+
+    // Test endpoints for unsynced sessions
+    app.post('/test/create-sessions', (req, res) => {
+      try {
+        createTestSessions();
+        res.json({
+          success: true,
+          message: 'Test sessions created successfully',
+          totalSessions: chargingSessions.length,
+          unsyncedSessions: chargingSessions.filter(s => s.unsynced === true).length
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
+    });
+
+    app.get('/test/sessions-status', (req, res) => {
+      const unsynced = chargingSessions.filter(s => s.unsynced === true).length;
+      const synced = chargingSessions.filter(s => s.unsynced === false).length;
+      
+      res.json({
+        totalSessions: chargingSessions.length,
+        unsyncedSessions: unsynced,
+        syncedSessions: synced,
+        sessions: chargingSessions.map(s => ({
+          sessionId: s.sessionId,
+          unsynced: s.unsynced,
+          startAt: s.startAt,
+          endAt: s.endAt,
+          energykW: s.energykW
+        }))
+      });
+    });
+
+    app.post('/test/reset-unsynced', (req, res) => {
+      try {
+        chargingSessions.forEach(session => {
+          session.unsynced = true;
+        });
+        saveJSON(SESSIONS_FILE, chargingSessions);
+        
+        res.json({
+          success: true,
+          message: 'All sessions reset to unsynced',
+          totalSessions: chargingSessions.length,
+          unsyncedSessions: chargingSessions.length
+        });
+      } catch (error) {
+        res.status(500).json({
+          success: false,
+          error: error.message
+        });
+      }
     });
 
     app.listen(config.httpPort, () => {

@@ -3,8 +3,9 @@ const WebSocket = require('ws');
 class UnsyncedSessionsTester {
     constructor() {
         this.ws = null;
-        this.serverUrl = 'ws://192.168.1.10:3000';
-        this.httpUrl = 'http://192.168.1.10:3002';
+        // Use localhost for development testing
+        this.serverUrl = 'ws://localhost:3000';
+        this.httpUrl = 'http://localhost:3002';
     }
 
     async connect() {
