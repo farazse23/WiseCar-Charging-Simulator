@@ -13,7 +13,7 @@ const execAsync = promisify(exec);
 const config = {
   port: process.env.PORT || 3000,
   httpPort: process.env.HTTP_PORT || 3002,
-  deviceId: 'wtl-202501234567', // model-serial format
+  deviceId: 'wtp3-202538063806', // Use your actual device format
   serviceName: '_wisecar._tcp.local',
   devMode: process.env.DEV_MODE === 'true' || process.argv.includes('--dev') // Development mode flag
 };
@@ -36,8 +36,8 @@ function getUptime() {
 
 // Device info structure matching new protocol
 const deviceInfo = {
-  model: "WTL-22KW",
-  serial: "202501234567", 
+  model: "WTP3-22KW",
+  serial: "202538063806", 
   firmwareESP: "1.2.3",
   firmwareSTM: "1.2.3",
   hardware: "4.1"
@@ -1756,6 +1756,8 @@ async function startServer() {
     if (!isHotspotMode) {
       console.log(`🔍 Also available on: ws://localhost:${config.port}`);
       console.log(`🏷️  Hostname for app: ws://${config.deviceId}.local:${config.port}`);
+      console.log(`📱 App should connect to: ws://${config.deviceId}.local:${config.port}`);
+      console.log(`🔧 If hostname fails, try: ws://${deviceIP}:${config.port}`);
     }
     console.log(`🌐 HTTP Server: http://${deviceIP}:${config.httpPort}`);
 
@@ -2065,7 +2067,7 @@ async function startServer() {
     // mDNS advertisement (works in both hotspot and Wi-Fi modes)
     let mdnsService = null;
     try {
-      // Use deviceId as hostname so app can connect via ws://wtl-202501234567.local:3000
+      // Use deviceId as hostname so app can connect via ws://wtp3-202538063806.local:3000
       const hostName = config.deviceId;
       mdnsService = bonjour.publish({
         name: hostName,
@@ -2100,7 +2102,9 @@ async function startServer() {
     // WebSocket connection handling
     wss.on('connection', (ws, req) => {
       const clientIP = req.socket.remoteAddress;
-      console.log(`🔗 New client connected from ${clientIP}`);
+      const timestamp = new Date().toISOString();
+      console.log(`🔗 [${timestamp}] New client connected from ${clientIP}`);
+      console.log(`📊 Connection details: ${deviceState.connectedClients.size + 1} clients total`);
       
       deviceState.connectedClients.add(ws);
       
@@ -2137,7 +2141,9 @@ async function startServer() {
       
       // Handle disconnection
       ws.on('close', () => {
-        console.log(`🔌 Client disconnected from ${clientIP}`);
+        const timestamp = new Date().toISOString();
+        console.log(`🔌 [${timestamp}] Client disconnected from ${clientIP}`);
+        console.log(`📊 Remaining clients: ${deviceState.connectedClients.size - 1}`);
         deviceState.connectedClients.delete(ws);
         clearInterval(telemetryInterval);
         
