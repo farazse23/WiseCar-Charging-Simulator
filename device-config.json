@@ -9,23 +9,23 @@
   "deviceSettings": {
     "rfidSupported": true,
     "autoPlug": true,
-    "fastCharging": true,
+    "fastCharging": false,
     "language": "en",
     "limitA": 16,
     "deviceTime": {
       "year": 2025,
       "month": 11,
-      "day": 21,
-      "hour": 23,
-      "minute": 44,
-      "second": 49,
-      "setAt": "2025-11-21T18:44:50.423Z"
+      "day": 28,
+      "hour": 15,
+      "minute": 49,
+      "second": 48,
+      "setAt": "2025-11-28T10:49:48.607Z"
     }
   },
   "networkConfig": {
-    "mode": "hotspot",
-    "ssid": null,
-    "password": null,
-    "local": false
+    "mode": "wifi",
+    "ssid": "abc",
+    "password": "12345678",
+    "local": true
   }
 }

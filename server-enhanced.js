@@ -1755,6 +1755,7 @@ async function startServer() {
     console.log(`🌐 WebSocket Server: ws://${deviceIP}:${config.port}`);
     if (!isHotspotMode) {
       console.log(`🔍 Also available on: ws://localhost:${config.port}`);
+      console.log(`🏷️  Hostname for app: ws://${config.deviceId}.local:${config.port}`);
     }
     console.log(`🌐 HTTP Server: http://${deviceIP}:${config.httpPort}`);
 
@@ -2064,9 +2065,10 @@ async function startServer() {
     // mDNS advertisement (works in both hotspot and Wi-Fi modes)
     let mdnsService = null;
     try {
-      const uniqueName = `wisecharger-mock-${Date.now()}`;
+      // Use deviceId as hostname so app can connect via ws://wtl-202501234567.local:3000
+      const hostName = config.deviceId;
       mdnsService = bonjour.publish({
-        name: uniqueName,
+        name: hostName,
         type: config.serviceName,
         port: config.port,
         txt: {
@@ -2080,12 +2082,15 @@ async function startServer() {
         }
       });
       
-      console.log(`📻 mDNS Service: ${uniqueName}.local:${config.port}`);
+      console.log(`📻 mDNS Service: ${hostName}.local:${config.port}`);
       console.log(`📋 Service Type: ${config.serviceName}`);
       if (isHotspotMode) {
         console.log(`ℹ️  In AP mode - mDNS available, fixed IP: ${deviceIP}`);
+        console.log(`📱 App should connect to: ws://${deviceIP}:${config.port}`);
       } else {
         console.log(`ℹ️  In Wi-Fi mode - mDNS broadcasting device info`);
+        console.log(`📱 App should connect to: ws://${hostName}.local:${config.port}`);
+        console.log(`🔧 If hostname fails, try: ws://${deviceIP}:${config.port}`);
       }
     } catch (error) {
       console.log('⚠️  mDNS service failed to start:', error.message);
