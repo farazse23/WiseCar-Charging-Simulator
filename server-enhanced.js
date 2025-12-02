@@ -13,7 +13,7 @@ const execAsync = promisify(exec);
 const config = {
   port: process.env.PORT || 3000,
   httpPort: process.env.HTTP_PORT || 3002,
-  deviceId: 'wtp3-202538063806', // Use your actual device format
+  deviceId: 'wtl-202501234567', // Use your actual device format
   serviceName: '_wisecar._tcp.local',
   devMode: process.env.DEV_MODE === 'true' || process.argv.includes('--dev') // Development mode flag
 };
@@ -36,11 +36,11 @@ function getUptime() {
 
 // Device info structure matching new protocol
 const deviceInfo = {
-  model: "WTP3-22KW",
-  serial: "202538063806", 
-  firmwareESP: "1.2.3",
-  firmwareSTM: "1.2.3",
-  hardware: "4.1"
+  model: "WT3S",
+  serial: "202501234567", 
+  firmwareESP: "2.0.1",
+  firmwareSTM: "2.0.1",
+  hardware: "4.2"
 };
 
 // Device settings
@@ -49,7 +49,9 @@ let deviceSettings = {
   autoPlug: true,
   fastCharging: true,
   language: "en",
-  limitA: 16
+  limitA: 16,
+  limitTimeHours: 0,
+  limitTimeMinutes: 0
 };
 
 // Device state with new telemetry structure
@@ -208,7 +210,7 @@ class WiFiHotspot {
   constructor() {
     this.isActive = false;
     this.ssid = `WiseCar-${config.deviceId.slice(-6)}`;
-    this.password = 'wisecar123';
+    this.password = 'charger2025';
   }
 
   async createWindowsHotspot() {
@@ -267,14 +269,14 @@ const wifiHotspot = new WiFiHotspot();
 
 // Device information for WiseCar app handshake
 function getDeviceInfo() {
-  const startDate = new Date('2025-10-30T12:34:56.789Z');
-  const endDate = new Date('2026-10-31T12:34:56.789Z');
+  const startDate = new Date('2025-01-15T10:00:00.000Z');
+  const endDate = new Date('2026-01-15T10:00:00.000Z');
   
   return {
     event: 'hello',
     deviceId: config.deviceId, // wtl-202501234567
     info: {
-      model: deviceInfo.model,          // WTL-22KW
+      model: deviceInfo.model,          // WT3S
       serial: deviceInfo.serial,        // 202501234567
       firmwareESP: deviceInfo.firmwareESP, // 1.2.3
       firmwareSTM: deviceInfo.firmwareSTM, // 1.2.3
@@ -1029,20 +1031,23 @@ function handleConfigCommand(ws, command) {
         break;
         
       case 'set_limitTime':
-        if (command.data && typeof command.data.value === 'number' && command.data.value > 0 && command.data.value <= 24) {
-          deviceSettings.limitTimeHours = command.data.value;
+        if (command.data && 
+            typeof command.data.hour === 'number' && command.data.hour >= 0 && command.data.hour <= 23 &&
+            typeof command.data.minute === 'number' && command.data.minute >= 0 && command.data.minute <= 59) {
+          deviceSettings.limitTimeHours = command.data.hour;
+          deviceSettings.limitTimeMinutes = command.data.minute;
           saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
           
           response = {
             ack: true,
             msg: "ok"
           };
-          console.log(`⏰ Charging time limit set to: ${command.data.value} hours`);
+          console.log(`⏰ Charging time limit set to: ${command.data.hour}h ${command.data.minute}m`);
         } else {
           response = {
             ack: false,
             msg: "error",
-            error: "Invalid time limit (must be 1-24 hours)"
+            error: "Invalid time limit (hour: 0-23, minute: 0-59)"
           };
         }
         break;    default:
@@ -1486,8 +1491,11 @@ function handleProtocolV21Command(ws, command) {
         break;
         
       case 'set_limitTime':
-        if (command.data && typeof command.data.value === 'number' && command.data.value > 0 && command.data.value <= 24) {
-          deviceSettings.limitTimeHours = command.data.value;
+        if (command.data && 
+            typeof command.data.hour === 'number' && command.data.hour >= 0 && command.data.hour <= 23 &&
+            typeof command.data.minute === 'number' && command.data.minute >= 0 && command.data.minute <= 59) {
+          deviceSettings.limitTimeHours = command.data.hour;
+          deviceSettings.limitTimeMinutes = command.data.minute;
           saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
           
           response = {
@@ -1495,18 +1503,19 @@ function handleProtocolV21Command(ws, command) {
             command: 'set_limitTime',
             success: true,
             data: {
-              value: command.data.value,
-              message: 'Charging time limit set successfully'
+              hour: command.data.hour,
+              minute: command.data.minute,
+              message: 'Set limit time setting updated'
             },
             timestamp: new Date().toISOString()
           };
-          console.log(`⏰ Charging time limit set to: ${command.data.value} hours`);
+          console.log(`⏰ Charging time limit set to: ${command.data.hour}h ${command.data.minute}m`);
         } else {
           response = {
             type: 'response',
             command: 'set_limitTime',
             success: false,
-            error: 'Invalid time limit (must be 1-24 hours)',
+            error: 'Invalid time limit (hour: 0-23, minute: 0-59)',
             timestamp: new Date().toISOString()
           };
         }
@@ -2067,7 +2076,7 @@ async function startServer() {
     // mDNS advertisement (works in both hotspot and Wi-Fi modes)
     let mdnsService = null;
     try {
-      // Use deviceId as hostname so app can connect via ws://wtp3-202538063806.local:3000
+      // Use deviceId as hostname so app can connect via ws://wtl-202501234567.local:3000
       const hostName = config.deviceId;
       mdnsService = bonjour.publish({
         name: hostName,
@@ -2075,9 +2084,9 @@ async function startServer() {
         port: config.port,
         txt: {
           deviceId: config.deviceId,
-          model: 'WiseCharger Pro AC22',
-          firmware: 'v2.1.4',
-          serial: 'WC-MOCK-123456',
+          model: 'WT3S',
+          firmware: 'v2.0.1',
+          serial: 'WC-DEMO-234567',
           rfidSupported: 'true',
           mode: networkConfig.mode,
           ip: deviceIP

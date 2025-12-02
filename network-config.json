@@ -1,6 +1,6 @@
 {
   "mode": "wifi",
-  "ssid": "THARA",
-  "password": "Thakra 999",
+  "ssid": "WiseCar_Device",
+  "password": "wisecar123",
   "local": true
 }

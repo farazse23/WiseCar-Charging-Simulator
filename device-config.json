@@ -1,10 +1,10 @@
 {
   "deviceInfo": {
-    "model": "WTP3-22KW",
-    "serial": "202538063806",
-    "firmwareESP": "1.2.3",
-    "firmwareSTM": "1.2.3",
-    "hardware": "4.1"
+    "model": "WT3S",
+    "serial": "202501234567",
+    "firmwareESP": "2.0.1",
+    "firmwareSTM": "2.0.1",
+    "hardware": "4.2"
   },
   "deviceSettings": {
     "rfidSupported": true,
@@ -12,14 +12,16 @@
     "fastCharging": true,
     "language": "en",
     "limitA": 16,
+    "limitTimeHours": 1,
+    "limitTimeMinutes": 0,
     "deviceTime": {
       "year": 2025,
-      "month": 11,
-      "day": 28,
-      "hour": 22,
-      "minute": 10,
-      "second": 35,
-      "setAt": "2025-11-28T17:10:35.835Z"
+      "month": 12,
+      "day": 2,
+      "hour": 14,
+      "minute": 23,
+      "second": 58,
+      "setAt": "2025-12-02T09:23:58.425Z"
     }
   },
   "networkConfig": {
