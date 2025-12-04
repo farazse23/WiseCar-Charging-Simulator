@@ -1,27 +1,27 @@
 {
   "deviceInfo": {
-    "model": "WT3S",
-    "serial": "202501234567",
-    "firmwareESP": "2.0.1",
-    "firmwareSTM": "2.0.1",
+    "model": "WTP3 S400",
+    "serial": "302501234567",
+    "firmwareESP": "2.1.1",
+    "firmwareSTM": "2.1.1",
     "hardware": "4.2"
   },
   "deviceSettings": {
     "rfidSupported": true,
     "autoPlug": true,
-    "fastCharging": true,
+    "fastCharging": false,
     "language": "en",
     "limitA": 16,
-    "limitTimeHours": 1,
+    "limitTimeHours": 0,
     "limitTimeMinutes": 0,
     "deviceTime": {
       "year": 2025,
       "month": 12,
-      "day": 2,
-      "hour": 14,
-      "minute": 23,
-      "second": 58,
-      "setAt": "2025-12-02T09:23:58.425Z"
+      "day": 4,
+      "hour": 5,
+      "minute": 37,
+      "second": 12,
+      "setAt": "2025-12-04T00:37:13.810Z"
     }
   },
   "networkConfig": {

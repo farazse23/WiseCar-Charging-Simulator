@@ -13,7 +13,7 @@ const execAsync = promisify(exec);
 const config = {
   port: process.env.PORT || 3000,
   httpPort: process.env.HTTP_PORT || 3002,
-  deviceId: 'wtl-202501234567', // Use your actual device format
+  deviceId: 'wtl-302501234567', // Use your actual device format
   serviceName: '_wisecar._tcp.local',
   devMode: process.env.DEV_MODE === 'true' || process.argv.includes('--dev') // Development mode flag
 };
@@ -36,10 +36,10 @@ function getUptime() {
 
 // Device info structure matching new protocol
 const deviceInfo = {
-  model: "WT3S",
-  serial: "202501234567", 
-  firmwareESP: "2.0.1",
-  firmwareSTM: "2.0.1",
+  model: "WTP3 S400",
+  serial: "302501234567", 
+  firmwareESP: "2.1.1",
+  firmwareSTM: "2.1.1",
   hardware: "4.2"
 };
 
@@ -269,18 +269,18 @@ const wifiHotspot = new WiFiHotspot();
 
 // Device information for WiseCar app handshake
 function getDeviceInfo() {
-  const startDate = new Date('2025-01-15T10:00:00.000Z');
-  const endDate = new Date('2026-01-15T10:00:00.000Z');
-  
+  // Use realistic values or those from config/deviceInfo
+  const startDate = new Date('2025-10-30T12:34:56.789Z');
+  const endDate = new Date('2026-10-31T12:34:56.789Z');
   return {
     event: 'hello',
-    deviceId: config.deviceId, // wtl-202501234567
+    deviceId: config.deviceId,
     info: {
-      model: deviceInfo.model,          // WT3S
-      serial: deviceInfo.serial,        // 202501234567
-      firmwareESP: deviceInfo.firmwareESP, // 1.2.3
-      firmwareSTM: deviceInfo.firmwareSTM, // 1.2.3
-      hardware: deviceInfo.hardware     // 4.1
+      model: 'WTL-22KW',
+      serial: deviceInfo.serial,
+      firmwareESP: deviceInfo.firmwareESP,
+      firmwareSTM: deviceInfo.firmwareSTM,
+      hardware: deviceInfo.hardware
     },
     settings: {
       rfidSupported: deviceSettings.rfidSupported,
@@ -292,6 +292,23 @@ function getDeviceInfo() {
     warranty: {
       start: startDate.toISOString(),
       end: endDate.toISOString()
+    },
+    rfids: rfids.map(rfid => ({
+      number: rfid.number,
+      id: rfid.id,
+      userId: rfid.userId
+    })),
+    network: {
+      mode: networkConfig.mode,
+      ssid: networkConfig.mode === 'hotspot' ? `WiseCar-${config.deviceId.slice(-6)}` : networkConfig.ssid,
+      connected: true,
+      local: networkConfig.local || false
+    },
+    status: {
+      charging: deviceState.isCharging,
+      connected: deviceState.connectedClients.size > 0,
+      error: null,
+      lastUpdate: new Date().toISOString()
     }
   };
 }
@@ -880,7 +897,9 @@ function handleCommand(ws, message) {
 function handleConfigCommand(ws, command) {
   let response;
   
-  switch (command.config) {
+  // Accept both 'config' and 'command' for compatibility
+  const configKey = command.config || command.command;
+  switch (configKey) {
     case 'network':
       if (command.ssid && command.password) {
         networkConfig.ssid = command.ssid;
@@ -981,20 +1000,25 @@ function handleConfigCommand(ws, command) {
       break;
       
       case 'set_limitA':
-        if (typeof command.value === 'number' && command.value >= 8 && command.value <= 32) {
-          deviceSettings.limitA = command.value;
+        const limitValue = command.data && typeof command.data.value === 'number' ? command.data.value : undefined;
+        if (typeof limitValue === 'number' && Number.isInteger(limitValue) && limitValue >= 1) {
+          deviceSettings.limitA = limitValue;
           saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          
           response = {
-            ack: true,
-            msg: "ok"
+            type: 'response',
+            command: 'set_limitA',
+            success: true,
+            data: { value: deviceSettings.limitA },
+            timestamp: new Date().toISOString()
           };
-          console.log(`⚡ Current limit set to: ${command.value}A`);
+          console.log(`⚡ Current limit set to: ${limitValue}A`);
         } else {
           response = {
-            ack: false,
-            msg: "error",
-            error: "Invalid current limit (must be 8-32A)"
+            type: 'response',
+            command: 'set_limitA',
+            success: false,
+            error: "Invalid current limit (must be a positive integer)",
+            timestamp: new Date().toISOString()
           };
         }
         break;
@@ -1109,18 +1133,24 @@ function handleActionCommand(ws, command) {
       break;
       
     case 'set_limitA':
-      if (typeof command.value === 'number' && command.value >= 8 && command.value <= 32) {
-        deviceSettings.limitA = command.value;
+      const limitValue = command.data && typeof command.data.value === 'number' ? command.data.value : undefined;
+      if (typeof limitValue === 'number' && Number.isInteger(limitValue) && limitValue >= 1) {
+        deviceSettings.limitA = limitValue;
         response = {
-          ack: true,
-          msg: "ok"
+          type: 'response',
+          command: 'set_limitA',
+          success: true,
+          data: { value: deviceSettings.limitA },
+          timestamp: new Date().toISOString()
         };
-        console.log(`⚡ Current limit updated to: ${command.value}A`);
+        console.log(`⚡ Current limit updated to: ${limitValue}A`);
       } else {
         response = {
-          ack: false,
-          msg: "error",
-          error: "Invalid current limit (must be 8-32A)"
+          type: 'response',
+          command: 'set_limitA',
+          success: false,
+          error: "Invalid current limit (must be a positive integer)",
+          timestamp: new Date().toISOString()
         };
       }
       break;
@@ -1657,7 +1687,8 @@ function handleProtocolV21Command(ws, command) {
               rfidId: currentSession.rfidId
             } : null,
             totalEnergy: deviceState.energyKWh,
-            uptime: getUptime()
+            uptime: getUptime(),
+            deviceId: deviceId // <-- Added for validation
           },
           timestamp: new Date().toISOString()
         };

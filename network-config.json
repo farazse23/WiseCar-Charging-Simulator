@@ -1,6 +1,6 @@
 {
   "mode": "wifi",
-  "ssid": "WiseCar_Device",
-  "password": "wisecar123",
+  "ssid": "abc",
+  "password": "12345678",
   "local": true
 }
