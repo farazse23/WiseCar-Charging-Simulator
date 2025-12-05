@@ -13,7 +13,7 @@ const execAsync = promisify(exec);
 const config = {
   port: process.env.PORT || 3000,
   httpPort: process.env.HTTP_PORT || 3002,
-  deviceId: 'wtp2-302501234567', // Use your actual device format
+  deviceId: 'wtl-302501234567', // Use your actual device format
   serviceName: '_wisecar._tcp.local',
   devMode: process.env.DEV_MODE === 'true' || process.argv.includes('--dev') // Development mode flag
 };
@@ -36,7 +36,7 @@ function getUptime() {
 
 // Device info structure matching new protocol
 const deviceInfo = {
-  model: "WTP2 S400",
+  model: "WTP3 S400",
   serial: "302501234567", 
   firmwareESP: "2.1.1",
   firmwareSTM: "2.1.1",
@@ -276,7 +276,7 @@ function getDeviceInfo() {
     event: 'hello',
     deviceId: config.deviceId,
     info: {
-      model: 'WTP2-22KW',
+      model: 'WTL-22KW',
       serial: deviceInfo.serial,
       firmwareESP: deviceInfo.firmwareESP,
       firmwareSTM: deviceInfo.firmwareSTM,
@@ -638,7 +638,7 @@ function createTestSessions() {
   saveJSON(SESSIONS_FILE, chargingSessions);
 }
 
-function startChargingSession(userId = null, rfidId = null) {
+function startChargingSession(userId = null, rfidId = null, markAsUnsynced = false) {
   // Stop any existing session first
   if (currentSession) {
     stopChargingSession('Previous session auto-stopped');
@@ -654,7 +654,7 @@ function startChargingSession(userId = null, rfidId = null) {
     endAt: null,
     energykW: 0, // Session energy starts at 0
     rfidId: rfidId, // RFID ID or null for manual
-    unsynced: true // Mark as unsynced initially
+    unsynced: markAsUnsynced // Only mark as unsynced for test sessions
   };
   
   // Add to sessions array
@@ -1688,7 +1688,7 @@ function handleProtocolV21Command(ws, command) {
             } : null,
             totalEnergy: deviceState.energyKWh,
             uptime: getUptime(),
-            deviceId: config.deviceId // <-- Added for validation
+            deviceId: deviceId // <-- Added for validation
           },
           timestamp: new Date().toISOString()
         };
@@ -1969,7 +1969,7 @@ async function startServer() {
         return;
       }
       
-      const session = startChargingSession(sessionType, rfidId);
+      const session = startChargingSession(sessionType, rfidId, true); // Mark test sessions as unsynced
       res.json({ 
         success: true, 
         message: 'Session started successfully',

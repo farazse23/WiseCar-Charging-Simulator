@@ -10,7 +10,7 @@
     "rfidSupported": true,
     "autoPlug": false,
     "fastCharging": false,
-    "language": "en",
+    "language": "tr",
     "limitA": 16,
     "limitTimeHours": 7,
     "limitTimeMinutes": 1,
@@ -19,9 +19,9 @@
       "month": 12,
       "day": 5,
       "hour": 21,
-      "minute": 12,
-      "second": 7,
-      "setAt": "2025-12-05T16:12:07.881Z"
+      "minute": 34,
+      "second": 39,
+      "setAt": "2025-12-05T16:34:39.847Z"
     }
   },
   "networkConfig": {
