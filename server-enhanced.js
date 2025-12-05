@@ -1688,7 +1688,7 @@ function handleProtocolV21Command(ws, command) {
             } : null,
             totalEnergy: deviceState.energyKWh,
             uptime: getUptime(),
-            deviceId: deviceId // <-- Added for validation
+            deviceId: config.deviceId // <-- Added for validation
           },
           timestamp: new Date().toISOString()
         };

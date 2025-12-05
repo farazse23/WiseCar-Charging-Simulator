@@ -3,9 +3,9 @@
     "sessionId": "session_000000001",
     "sessionStatus": "completed",
     "sessionUserId": "manual",
-    "startAt": "2025-12-05T15:54:30.930Z",
-    "endAt": "2025-12-05T15:54:45.508Z",
-    "energykW": 0.015,
+    "startAt": "2025-12-05T17:49:06.105Z",
+    "endAt": "2025-12-05T17:49:24.980Z",
+    "energykW": 0.114,
     "rfidId": null,
     "unsynced": false
   },
@@ -13,9 +13,19 @@
     "sessionId": "session_000000002",
     "sessionStatus": "completed",
     "sessionUserId": "manual",
-    "startAt": "2025-12-05T16:25:25.677Z",
-    "endAt": "2025-12-05T16:26:08.130Z",
-    "energykW": 0.042,
+    "startAt": "2025-12-05T17:50:57.499Z",
+    "endAt": "2025-12-05T17:51:10.330Z",
+    "energykW": 0.075,
+    "rfidId": null,
+    "unsynced": false
+  },
+  {
+    "sessionId": "session_000000003",
+    "sessionStatus": "completed",
+    "sessionUserId": "manual",
+    "startAt": "2025-12-05T17:56:58.269Z",
+    "endAt": "2025-12-05T17:57:31.362Z",
+    "energykW": 0.194,
     "rfidId": null,
     "unsynced": false
   }
