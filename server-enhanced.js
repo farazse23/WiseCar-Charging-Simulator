@@ -13,7 +13,7 @@ const execAsync = promisify(exec);
 const config = {
   port: process.env.PORT || 3000,
   httpPort: process.env.HTTP_PORT || 3002,
-  deviceId: 'wtl-302501234567', // Use your actual device format
+  deviceId: 'wtp2-302501234567', // Use your actual device format
   serviceName: '_wisecar._tcp.local',
   devMode: process.env.DEV_MODE === 'true' || process.argv.includes('--dev') // Development mode flag
 };
@@ -36,7 +36,7 @@ function getUptime() {
 
 // Device info structure matching new protocol
 const deviceInfo = {
-  model: "WTP3 S400",
+  model: "WTP2 S400",
   serial: "302501234567", 
   firmwareESP: "2.1.1",
   firmwareSTM: "2.1.1",
@@ -276,7 +276,7 @@ function getDeviceInfo() {
     event: 'hello',
     deviceId: config.deviceId,
     info: {
-      model: 'WTL-22KW',
+      model: 'WTP2-22KW',
       serial: deviceInfo.serial,
       firmwareESP: deviceInfo.firmwareESP,
       firmwareSTM: deviceInfo.firmwareSTM,
@@ -1688,7 +1688,7 @@ function handleProtocolV21Command(ws, command) {
             } : null,
             totalEnergy: deviceState.energyKWh,
             uptime: getUptime(),
-            deviceId: deviceId // <-- Added for validation
+            deviceId: config.deviceId // <-- Added for validation
           },
           timestamp: new Date().toISOString()
         };

@@ -1,6 +1,6 @@
 {
   "deviceInfo": {
-    "model": "WTP3 S400",
+    "model": "WTP2 S400",
     "serial": "302501234567",
     "firmwareESP": "2.1.1",
     "firmwareSTM": "2.1.1",
@@ -8,20 +8,20 @@
   },
   "deviceSettings": {
     "rfidSupported": true,
-    "autoPlug": true,
+    "autoPlug": false,
     "fastCharging": false,
     "language": "en",
     "limitA": 16,
-    "limitTimeHours": 0,
-    "limitTimeMinutes": 0,
+    "limitTimeHours": 7,
+    "limitTimeMinutes": 1,
     "deviceTime": {
       "year": 2025,
       "month": 12,
-      "day": 4,
-      "hour": 5,
-      "minute": 37,
-      "second": 12,
-      "setAt": "2025-12-04T00:37:13.810Z"
+      "day": 5,
+      "hour": 21,
+      "minute": 12,
+      "second": 7,
+      "setAt": "2025-12-05T16:12:07.881Z"
     }
   },
   "networkConfig": {
