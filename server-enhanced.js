@@ -2100,6 +2100,91 @@ async function startServer() {
       }
     });
 
+    // Device-side limit change endpoints
+    // Simulate changing current limit from device side
+    app.post('/device/set-limit-current/:amperage', (req, res) => {
+      const amperage = parseInt(req.params.amperage);
+      
+      if (isNaN(amperage) || amperage < 6 || amperage > 32) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid amperage value (must be between 6 and 32)'
+        });
+      }
+      
+      // Update device settings
+      deviceSettings.limitA = amperage;
+      saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+      
+      // Create event message to broadcast to all clients
+      const eventMessage = {
+        type: 'event',
+        command: 'set_limitA',
+        success: true,
+        data: {
+          value: amperage,
+          message: 'Set Limit setting updated'
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      // Broadcast to all connected clients
+      broadcastToClients(eventMessage);
+      
+      console.log(`⚡ Device limit changed to ${amperage}A - broadcasted to ${deviceState.connectedClients.size} clients`);
+      
+      res.json({
+        success: true,
+        message: `Current limit set to ${amperage}A and broadcasted to all clients`,
+        limitA: amperage,
+        clientsNotified: deviceState.connectedClients.size
+      });
+    });
+
+    // Simulate changing time limit from device side
+    app.post('/device/set-limit-time', (req, res) => {
+      const { hour, minute } = req.body;
+      
+      if (typeof hour !== 'number' || hour < 0 || hour > 23 ||
+          typeof minute !== 'number' || minute < 0 || minute > 59) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid time values (hour: 0-23, minute: 0-59)'
+        });
+      }
+      
+      // Update device settings
+      deviceSettings.limitTimeHours = hour;
+      deviceSettings.limitTimeMinutes = minute;
+      saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+      
+      // Create event message to broadcast to all clients
+      const eventMessage = {
+        type: 'event',
+        command: 'set_limitTime',
+        success: true,
+        data: {
+          hour: hour,
+          minutes: minute,
+          message: 'Set limit time setting updated'
+        },
+        timestamp: new Date().toISOString()
+      };
+      
+      // Broadcast to all connected clients
+      broadcastToClients(eventMessage);
+      
+      console.log(`⏰ Device time limit changed to ${hour}h ${minute}m - broadcasted to ${deviceState.connectedClients.size} clients`);
+      
+      res.json({
+        success: true,
+        message: `Time limit set to ${hour}h ${minute}m and broadcasted to all clients`,
+        limitTimeHours: hour,
+        limitTimeMinutes: minute,
+        clientsNotified: deviceState.connectedClients.size
+      });
+    });
+
     app.listen(config.httpPort, () => {
       console.log(`🌐 HTTP API available at: http://${deviceIP}:${config.httpPort}`);
     });
