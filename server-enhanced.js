@@ -205,6 +205,70 @@ function getDeviceIP() {
   return getLocalIP(); // Dynamic IP in Wi-Fi mode
 }
 
+// Network scanning function for Windows
+async function scanAvailableNetworks() {
+  try {
+    // Use netsh wlan show networks to get available WiFi networks
+    const { stdout } = await execAsync('netsh wlan show networks mode=Bssid', { encoding: 'utf8' });
+    
+    const networks = [];
+    const lines = stdout.split('\n');
+    
+    let currentNetwork = null;
+    
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i].trim();
+      
+      // Match SSID line
+      if (line.startsWith('SSID')) {
+        const ssidMatch = line.match(/SSID \d+ : (.+)/);
+        if (ssidMatch && ssidMatch[1].trim()) {
+          if (currentNetwork) {
+            networks.push(currentNetwork);
+          }
+          currentNetwork = {
+            ssid: ssidMatch[1].trim(),
+            rssi: 0
+          };
+        }
+      }
+      
+      // Match Signal strength line
+      if (line.includes('Signal') && currentNetwork) {
+        const signalMatch = line.match(/Signal\s*:\s*(\d+)%/);
+        if (signalMatch) {
+          const signalPercent = parseInt(signalMatch[1]);
+          // Convert signal percentage to normalized 0-4 scale
+          // 0-20% = 0, 21-40% = 1, 41-60% = 2, 61-80% = 3, 81-100% = 4
+          currentNetwork.rssi = Math.floor(signalPercent / 20);
+          if (currentNetwork.rssi > 4) currentNetwork.rssi = 4;
+        }
+      }
+    }
+    
+    // Add the last network
+    if (currentNetwork) {
+      networks.push(currentNetwork);
+    }
+    
+    // Remove duplicates based on SSID
+    const uniqueNetworks = [];
+    const seenSSIDs = new Set();
+    
+    for (const network of networks) {
+      if (!seenSSIDs.has(network.ssid)) {
+        seenSSIDs.add(network.ssid);
+        uniqueNetworks.push(network);
+      }
+    }
+    
+    return uniqueNetworks;
+  } catch (error) {
+    console.error('❌ Network scan error:', error.message);
+    throw error;
+  }
+}
+
 // Real WiFi Hotspot Management
 class WiFiHotspot {
   constructor() {
@@ -779,13 +843,13 @@ function disconnectAllClients(reason = 'Device disconnect') {
 }
 
 // Handle client commands - Protocol v2.1 with legacy support
-function handleCommand(ws, message) {
+async function handleCommand(ws, message) {
   try {
     const command = JSON.parse(message);
     
     // Protocol v2.1 - Handle new format with "type" field
     if (command.type) {
-      handleProtocolV21Command(ws, command);
+      await handleProtocolV21Command(ws, command);
       return;
     }
     
@@ -1315,7 +1379,7 @@ function handleSystemCommand(ws, command) {
 }
 
 // Protocol v2.1 command handler (DEPRECATED - keeping for reference)
-function handleProtocolV21Command(ws, command) {
+async function handleProtocolV21Command(ws, command) {
   let response;
   
   // Config commands
@@ -1693,6 +1757,48 @@ function handleProtocolV21Command(ws, command) {
           timestamp: new Date().toISOString()
         };
         console.log('📊 Command: Get status - Device status sent');
+        break;
+        
+      case 'scan_network':
+        console.log('📡 Command: Scan network - Starting WiFi scan...');
+        try {
+          const networks = await scanAvailableNetworks();
+          
+          if (networks.length === 0) {
+            response = {
+              type: 'response',
+              command: 'scan_network',
+              success: false,
+              error: 'no network',
+              timestamp: new Date().toISOString()
+            };
+            console.log('⚠️  No networks found');
+          } else {
+            response = {
+              type: 'response',
+              command: 'scan_network',
+              success: true,
+              data: {
+                networks: networks,
+                count: networks.length
+              },
+              timestamp: new Date().toISOString()
+            };
+            console.log(`✅ Found ${networks.length} networks:`);
+            networks.forEach(net => {
+              console.log(`   - ${net.ssid} (signal: ${net.rssi}/4)`);
+            });
+          }
+        } catch (error) {
+          response = {
+            type: 'response',
+            command: 'scan_network',
+            success: false,
+            error: 'scan failed',
+            timestamp: new Date().toISOString()
+          };
+          console.error('❌ Network scan failed:', error.message);
+        }
         break;
         
       default:
