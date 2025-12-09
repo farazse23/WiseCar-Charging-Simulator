@@ -1,1 +1,12 @@
-[]
+[
+  {
+    "sessionId": "session_000000001",
+    "sessionStatus": "completed",
+    "sessionUserId": "manual",
+    "startAt": "2025-12-09T13:13:17.483Z",
+    "endAt": "2025-12-09T13:13:41.551Z",
+    "energykW": 0.024,
+    "rfidId": null,
+    "unsynced": false
+  }
+]

@@ -731,19 +731,7 @@ function startChargingSession(userId = null, rfidId = null, markAsUnsynced = fal
   
   console.log(`🔌 Session started: ${currentSession.sessionId} (${rfidId ? 'RFID' : 'Manual'})`);
   
-  // Broadcast charging start event to all clients
-  console.log(`📡 Broadcasting charging start event to ${deviceState.connectedClients.size} clients`);
-  broadcastToClients({
-    type: "event",
-    command: "start_charging",
-    success: true,
-    data: {
-      sessionId: currentSession.sessionId,
-      startTime: currentSession.startAt,
-      message: "Charging started successfully"
-    },
-    timestamp: now.toISOString()
-  });
+  // ...existing code...
   
   return currentSession;
 }
@@ -768,20 +756,7 @@ function stopChargingSession(reason = 'Session ended') {
   
   const completedSession = currentSession;
   
-  // Broadcast charging stop event to all clients
-  console.log(`📡 Broadcasting charging stop event to ${deviceState.connectedClients.size} clients`);
-  broadcastToClients({
-    type: "event",
-    command: "stop_charging",
-    success: true,
-    data: {
-      sessionId: completedSession.sessionId,
-      endTime: completedSession.endAt,
-      energyDelivered: deviceState.energykW,
-      message: "Charging stopped successfully"
-    },
-    timestamp: now.toISOString()
-  });
+  // ...existing code...
   
   currentSession = null; // Clear active session
   
@@ -1631,56 +1606,105 @@ async function handleProtocolV21Command(ws, command) {
     switch (command.command) {
       case 'start_charging':
         if (!deviceState.isCharging) {
+          // Prepare session but do not send event yet
           const session = startChargingSession('manual');
           response = {
             type: 'response',
             command: 'start_charging',
             success: true,
-            data: {
-              sessionId: session.sessionId,
-              startTime: session.startAt,
-              message: 'Charging started successfully'
-            },
             timestamp: new Date().toISOString()
           };
-          console.log('� Command: Start charging (v2.1)');
+          ws.send(JSON.stringify(response));
+          console.log('✅ Response: Start charging (success) sent, will send event after 5s');
+          // After 5 seconds, send the event to all clients
+          setTimeout(() => {
+            const eventMsg = {
+              type: 'event',
+              deviceId: config.deviceId,
+              command: 'start_charging',
+              success: true,
+              data: {
+                sessionId: session.sessionId,
+                startTime: session.startAt,
+                message: 'charging started successfully'
+              },
+              timestamp: new Date().toISOString()
+            };
+            broadcastToClients(eventMsg);
+            console.log('📡 Event: Start charging sent to app');
+          }, 5000);
+          return;
         } else {
           response = {
             type: 'response',
             command: 'start_charging',
             success: false,
-            error: 'Device is already charging',
+            error: 'Charging already in progress',
             timestamp: new Date().toISOString()
           };
+          ws.send(JSON.stringify(response));
+          // After 5 seconds, send the event with error
+          setTimeout(() => {
+            const eventMsg = {
+              type: 'event',
+              deviceId: config.deviceId,
+              command: 'start_charging',
+              success: false,
+              data: {
+                message: 'Charging already in progress'
+              },
+              timestamp: new Date().toISOString()
+            };
+            broadcastToClients(eventMsg);
+            console.log('📡 Event: Start charging (error) sent to app');
+          }, 5000);
+          return;
         }
-        break;
+        // break intentionally omitted, handled by return
         
       case 'stop_charging':
         if (deviceState.isCharging) {
-          const session = stopChargingSession('Manual stop via WebSocket');
+          // Send response immediately, but delay actual stop and event
           response = {
             type: 'response',
             command: 'stop_charging',
             success: true,
-            data: {
-              sessionId: session.sessionId,
-              endTime: session.endAt,
-              energyConsumed: deviceState.energykW,
-              message: 'Charging stopped successfully'
-            },
             timestamp: new Date().toISOString()
           };
-          console.log('📱 Command: Stop charging (v2.1)');
+          ws.send(JSON.stringify(response));
+          console.log('✅ Response: Stop charging (success) sent, will stop session and send event after 5s');
+          setTimeout(() => {
+            const session = stopChargingSession('Manual stop via WebSocket');
+            const eventMsg = {
+              type: 'event',
+              deviceId: config.deviceId,
+              command: 'stop_charging',
+              success: true,
+              data: {
+                sessionId: session.sessionId,
+                endTime: session.endAt,
+                energyDelivered: session.energykW,
+                error: false,
+                message: 'Charging stopped successfully'
+              },
+              timestamp: new Date().toISOString()
+            };
+            broadcastToClients(eventMsg);
+            console.log('📡 Event: Stop charging sent to app');
+          }, 5000);
+          return;
         } else {
           response = {
             type: 'response',
             command: 'stop_charging',
             success: false,
-            error: 'Device is not charging',
+            error: 'Not charging',
             timestamp: new Date().toISOString()
           };
+          ws.send(JSON.stringify(response));
+          return;
         }
-        break;
+        // break intentionally omitted, handled by return
         
       case 'get_unsynced_sessions':
         const unsyncedSessions = chargingSessions.filter(s => s.unsynced === true);
