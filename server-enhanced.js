@@ -613,29 +613,22 @@ function generateSessionId() {
 
 // Test function to create sample sessions for testing unsynced functionality
 function createTestSessions() {
-  const testSessions = [
-    {
-      sessionId: "session_000000001",
-      userId: "TNPHEGSTn7VSx8XZ6n2vKWfGbpp1",
-      startAt: "2025-11-08T09:00:00.000Z",
-      endAt: "2025-11-08T09:30:00.000Z",
-      energykW: 5.25,
-      rfidId: "RFID#123456",
-      error: "Overloaded current",
-      unsynced: true
-    }
-  ];
+  // Clear all existing sessions before adding the test session
+  chargingSessions.length = 0;
+  const testSession = {
+    sessionId: "session_abc12345",
+    userId: "TNPHEGSTn7VSx8XZ6n2vKWfGbpp1",
+    startAt: "2025-11-08T09:00:00.000Z",
+    endAt: "2025-11-08T09:30:00.000Z",
+    energykW: 5.25,
+    rfidId: "RFID#123456",
+    error: "Overloaded current",
+    unsynced: true
+  };
+  chargingSessions.push(testSession);
+  sessionCounter = 2;
   
-  // Add test sessions to the array, updating sessionCounter
-  testSessions.forEach(session => {
-    chargingSessions.push(session);
-    const sessionNum = parseInt(session.sessionId.split('_')[1]);
-    if (sessionNum >= sessionCounter) {
-      sessionCounter = sessionNum + 1;
-    }
-  });
-  
-  console.log(`🧪 Created ${testSessions.length} test sessions for unsynced testing`);
+  console.log(`🧪 Created 1 test session for unsynced testing`);
   console.log(`📊 Total sessions: ${chargingSessions.length}, Next session counter: ${sessionCounter}`);
   
   // Save to file

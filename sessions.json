@@ -1,12 +1,12 @@
 [
   {
-    "sessionId": "session_000000001",
-    "sessionStatus": "completed",
-    "sessionUserId": "manual",
-    "startAt": "2025-12-09T13:13:17.483Z",
-    "endAt": "2025-12-09T13:13:41.551Z",
-    "energykW": 0.024,
-    "rfidId": null,
-    "unsynced": false
+    "sessionId": "session_abc12345",
+    "userId": "TNPHEGSTn7VSx8XZ6n2vKWfGbpp1",
+    "startAt": "2025-11-08T09:00:00.000Z",
+    "endAt": "2025-11-08T09:30:00.000Z",
+    "energykW": 5.25,
+    "rfidId": "RFID#123456",
+    "error": "Overloaded current",
+    "unsynced": true
   }
 ]
