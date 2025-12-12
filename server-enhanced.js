@@ -1662,11 +1662,12 @@ async function handleProtocolV21Command(ws, command) {
           data: {
             sessions: sessionsBatch.map(session => ({
               sessionId: session.sessionId,
-              userId: 'TNPHEGSTn7VSx8XZ6n2vKWfGbpp1',
+              userId: session.sessionUserId || session.userId || null,
+              status: 'completed',
               startAt: session.startAt,
               endAt: session.endAt,
               energykW: session.energykW,
-              rfidId: session.rfidId,
+              rfidId: session.rfidId || null,
               error: session.error || null
             })),
             count: sessionsBatch.length
