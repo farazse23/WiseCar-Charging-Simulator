@@ -617,7 +617,9 @@ function createTestSessions() {
   chargingSessions.length = 0;
   const testSession = {
     sessionId: "session_abc12345",
+    deviceId: config.deviceId,
     userId: "TNPHEGSTn7VSx8XZ6n2vKWfGbpp1",
+    status: "completed",
     startAt: "2025-11-08T09:00:00.000Z",
     endAt: "2025-11-08T09:30:00.000Z",
     energykW: 5.25,
