@@ -616,72 +616,12 @@ function createTestSessions() {
   const testSessions = [
     {
       sessionId: "session_000000001",
-      sessionStatus: "completed",
-      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
+      userId: "TNPHEGSTn7VSx8XZ6n2vKWfGbpp1",
       startAt: "2025-11-08T09:00:00.000Z",
       endAt: "2025-11-08T09:30:00.000Z",
       energykW: 5.25,
       rfidId: "RFID#123456",
-      unsynced: true
-    },
-    {
-      sessionId: "session_000000002",
-      sessionStatus: "completed",
-      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
-      startAt: "2025-11-08T10:00:00.000Z",
-      endAt: "2025-11-08T10:45:00.000Z",
-      energykW: 7.80,
-      rfidId: null,
-      unsynced: true
-    },
-    {
-      sessionId: "session_000000003",
-      sessionStatus: "completed",
-      sessionUserId: "user_test123",
-      startAt: "2025-11-08T11:00:00.000Z",
-      endAt: "2025-11-08T12:15:00.000Z",
-      energykW: 12.45,
-      rfidId: "RFID#789012",
-      unsynced: true
-    },
-    {
-      sessionId: "session_000000004",
-      sessionStatus: "completed",
-      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
-      startAt: "2025-11-08T13:00:00.000Z",
-      endAt: "2025-11-08T14:30:00.000Z",
-      energykW: 15.20,
-      rfidId: null,
-      unsynced: true
-    },
-    {
-      sessionId: "session_000000005",
-      sessionStatus: "completed",
-      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
-      startAt: "2025-11-08T15:00:00.000Z",
-      endAt: "2025-11-08T16:00:00.000Z",
-      energykW: 8.75,
-      rfidId: "RFID#345678",
-      unsynced: true
-    },
-    {
-      sessionId: "session_000000006",
-      sessionStatus: "completed",
-      sessionUserId: "user_test456",
-      startAt: "2025-11-08T17:00:00.000Z",
-      endAt: "2025-11-08T18:30:00.000Z",
-      energykW: 18.90,
-      rfidId: null,
-      unsynced: true
-    },
-    {
-      sessionId: "session_000000007",
-      sessionStatus: "completed",
-      sessionUserId: "oky4MSvzXdg4bgOJWpV3nLlLct32",
-      startAt: "2025-11-08T19:00:00.000Z",
-      endAt: "2025-11-08T20:45:00.000Z",
-      energykW: 22.30,
-      rfidId: "RFID#901234",
+      error: "Overloaded current",
       unsynced: true
     }
   ];
@@ -1710,7 +1650,7 @@ async function handleProtocolV21Command(ws, command) {
         const unsyncedSessions = chargingSessions.filter(s => s.unsynced === true);
         const batchSize = 5; // Send maximum 5 sessions at a time
         const sessionsBatch = unsyncedSessions.slice(0, batchSize);
-        
+
         response = {
           type: 'response',
           command: 'get_unsynced_sessions',
@@ -1718,16 +1658,18 @@ async function handleProtocolV21Command(ws, command) {
           data: {
             sessions: sessionsBatch.map(session => ({
               sessionId: session.sessionId,
+              userId: 'TNPHEGSTn7VSx8XZ6n2vKWfGbpp1',
               startAt: session.startAt,
               endAt: session.endAt,
               energykW: session.energykW,
-              rfidId: session.rfidId
+              rfidId: session.rfidId,
+              error: session.error || null
             })),
             count: sessionsBatch.length
           },
           timestamp: new Date().toISOString()
         };
-        
+
         // Mark the sent sessions as synced
         sessionsBatch.forEach(session => {
           const index = chargingSessions.findIndex(s => s.sessionId === session.sessionId);
@@ -1735,10 +1677,10 @@ async function handleProtocolV21Command(ws, command) {
             chargingSessions[index].unsynced = false;
           }
         });
-        
+
         // Save updated sessions to file
         saveJSON(SESSIONS_FILE, chargingSessions);
-        
+
         console.log(`📊 Command: Get unsynced sessions - Sent ${sessionsBatch.length} of ${unsyncedSessions.length} unsynced sessions`);
         break;
         
