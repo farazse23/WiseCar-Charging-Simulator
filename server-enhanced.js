@@ -122,6 +122,15 @@ try {
   }
 } catch {}
 
+// Load persisted sessions
+try {
+  const loadedSessions = loadJSON(SESSIONS_FILE, null);
+  if (loadedSessions && Array.isArray(loadedSessions)) {
+    chargingSessions = loadedSessions;
+    console.log(`💾 Loaded ${chargingSessions.length} sessions from disk (${chargingSessions.filter(s => s.unsynced).length} unsynced)`);
+  }
+} catch {}
+
 // Load persisted network configuration
 // DISABLED: Always start in hotspot mode for testing
 // try {
