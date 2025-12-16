@@ -10,18 +10,22 @@
     "rfidSupported": true,
     "autoPlug": false,
     "fastCharging": false,
-    "language": "tr",
+    "language": "en",
     "limitA": 16,
     "limitTimeHours": 0,
     "limitTimeMinutes": 0,
+    "timeHour": 8,
+    "timeMinute": 30,
+    "testMode": false,
+    "adminUserId": "MIJGhRsdFfY6dMuPqWw2N2g5Mpg1",
     "deviceTime": {
       "year": 2025,
       "month": 12,
-      "day": 9,
-      "hour": 18,
-      "minute": 12,
-      "second": 35,
-      "setAt": "2025-12-09T13:12:35.872Z"
+      "day": 16,
+      "hour": 22,
+      "minute": 11,
+      "second": 30,
+      "setAt": "2025-12-16T17:11:30.063Z"
     }
   },
   "networkConfig": {

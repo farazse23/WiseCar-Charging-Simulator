@@ -13,7 +13,7 @@ const execAsync = promisify(exec);
 const config = {
   port: process.env.PORT || 3000,
   httpPort: process.env.HTTP_PORT || 3002,
-  deviceId: 'wtl-302501234567', // Use your actual device format
+  deviceId: 'wtl-Check_2501234567', // Use your actual device format
   serviceName: '_wisecar._tcp.local',
   devMode: process.env.DEV_MODE === 'true' || process.argv.includes('--dev') // Development mode flag
 };
@@ -51,7 +51,11 @@ let deviceSettings = {
   language: "en",
   limitA: 16,
   limitTimeHours: 0,
-  limitTimeMinutes: 0
+  limitTimeMinutes: 0,
+  timeHour: 8,
+  timeMinute: 30,
+  testMode: false,
+  adminUserId: "MIJGhRsdFfY6dMuPqWw2N2g5Mpg1"
 };
 
 // Device state with new telemetry structure
@@ -345,7 +349,7 @@ function getDeviceInfo() {
   // Use realistic values or those from config/deviceInfo
   const startDate = new Date('2025-10-30T12:34:56.789Z');
   const endDate = new Date('2026-10-31T12:34:56.789Z');
-  return {
+  const handshake = {
     event: 'hello',
     deviceId: config.deviceId,
     info: {
@@ -360,7 +364,11 @@ function getDeviceInfo() {
       autoPlug: deviceSettings.autoPlug,
       fastCharging: deviceSettings.fastCharging,
       language: deviceSettings.language,
-      limitA: deviceSettings.limitA
+      limitA: deviceSettings.limitA,
+      timeHour: deviceSettings.timeHour,
+      timeMinute: deviceSettings.timeMinute,
+      testMode: deviceSettings.testMode,
+      adminUserId: deviceSettings.adminUserId || null
     },
     warranty: {
       start: startDate.toISOString(),
@@ -384,6 +392,8 @@ function getDeviceInfo() {
       lastUpdate: new Date().toISOString()
     }
   };
+  console.log('🔗 Handshake payload:', JSON.stringify(handshake, null, 2));
+  return handshake;
 }
 
 // Generate telemetry data matching WiseCar app protocol
