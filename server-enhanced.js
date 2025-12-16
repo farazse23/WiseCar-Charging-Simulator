@@ -55,7 +55,7 @@ let deviceSettings = {
   timeHour: 8,
   timeMinute: 30,
   testMode: false,
-  adminUserId: "MIJGhRsdFfY6dMuPqWw2N2g5Mpg1"
+  adminUserId: null // Set to null for testing
 };
 
 // Device state with new telemetry structure
@@ -991,6 +991,52 @@ function handleConfigCommand(ws, command) {
         };
       }
       break;
+
+    case 'adminUserId':
+      // Accept adminUserId in both command.data.adminUserId and command.data.value.adminUserId
+      let adminId = null;
+      if (command.data) {
+        if (typeof command.data.adminUserId === 'string') {
+          adminId = command.data.adminUserId;
+        } else if (command.data.value && typeof command.data.value === 'object' && typeof command.data.value.adminUserId === 'string') {
+          adminId = command.data.value.adminUserId;
+        } else if (typeof command.data.value === 'string') {
+          // In case value is sent directly as a string
+          adminId = command.data.value;
+        }
+      }
+      if (deviceSettings.adminUserId && deviceSettings.adminUserId !== "") {
+        response = {
+          type: 'response',
+          command: 'adminUserId',
+          success: false,
+          error: 'Admin user id has already been assigned',
+          timestamp: new Date().toISOString()
+        };
+      } else if (adminId) {
+        deviceSettings.adminUserId = adminId;
+        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+        response = {
+          type: 'response',
+          command: 'adminUserId',
+          success: true,
+          data: {
+            value: true,
+            message: 'Admin user id assigned'
+          },
+          timestamp: new Date().toISOString()
+        };
+        console.log(`👤 Admin user id assigned: ${adminId}`);
+      } else {
+        response = {
+          type: 'response',
+          command: 'adminUserId',
+          success: false,
+          error: 'Invalid adminUserId value',
+          timestamp: new Date().toISOString()
+        };
+      }
+      break;
       
       case 'set_limitA':
         const limitValue = command.data && typeof command.data.value === 'number' ? command.data.value : undefined;
@@ -1539,6 +1585,53 @@ async function handleProtocolV21Command(ws, command) {
             command: 'set_limitTime',
             success: false,
             error: 'Invalid time limit (hour: 0-23, minute: 0-59)',
+            timestamp: new Date().toISOString()
+          };
+        }
+        break;
+        
+      case 'adminUserId':
+        // Accept adminUserId in both command.data.adminUserId and command.data.value.adminUserId
+        let adminId = null;
+        if (command.data) {
+          if (typeof command.data.adminUserId === 'string') {
+            adminId = command.data.adminUserId;
+          } else if (command.data.value && typeof command.data.value === 'object' && typeof command.data.value.adminUserId === 'string') {
+            adminId = command.data.value.adminUserId;
+          } else if (typeof command.data.value === 'string') {
+            // In case value is sent directly as a string
+            adminId = command.data.value;
+          }
+        }
+        
+        if (deviceSettings.adminUserId && deviceSettings.adminUserId !== "") {
+          response = {
+            type: 'response',
+            command: 'adminUserId',
+            success: false,
+            error: 'Admin user id has already been assigned',
+            timestamp: new Date().toISOString()
+          };
+        } else if (adminId) {
+          deviceSettings.adminUserId = adminId;
+          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+          response = {
+            type: 'response',
+            command: 'adminUserId',
+            success: true,
+            data: {
+              value: true,
+              message: 'Admin user id assigned'
+            },
+            timestamp: new Date().toISOString()
+          };
+          console.log(`👤 Admin user id assigned: ${adminId}`);
+        } else {
+          response = {
+            type: 'response',
+            command: 'adminUserId',
+            success: false,
+            error: 'Invalid adminUserId value',
             timestamp: new Date().toISOString()
           };
         }
