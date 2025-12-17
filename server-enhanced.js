@@ -54,7 +54,7 @@ let deviceSettings = {
   limitTimeMinutes: 0,
   timeHour: 8,
   timeMinute: 30,
-  testMode: false,
+  testMode: true,
   adminUserId: null // Set to null for testing
 };
 
@@ -1037,6 +1037,72 @@ function handleConfigCommand(ws, command) {
         };
       }
       break;
+
+    case 'testMode':
+      if (command.data && typeof command.data.value === 'boolean') {
+        deviceSettings.testMode = command.data.value;
+        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+        response = {
+          type: 'response',
+          command: 'testMode',
+          success: true,
+          data: {
+            value: command.data.value,
+            message: command.data.value ? 'Test mode is activated' : 'Test mode is deactivated'
+          },
+          timestamp: new Date().toISOString()
+        };
+        console.log(`🧪 Test mode ${command.data.value ? 'activated' : 'deactivated'}`);
+      } else {
+        response = {
+          type: 'response',
+          command: 'testMode',
+          success: false,
+          error: 'Invalid testMode value - boolean required',
+          timestamp: new Date().toISOString()
+        };
+      }
+      break;
+
+    case 'settingsReset':
+      // Verify admin user id
+      const resetAdminId = command.data && command.data.adminUserId ? command.data.adminUserId : null;
+      if (resetAdminId && deviceSettings.adminUserId === resetAdminId) {
+        // Reset settings to defaults (keep adminUserId)
+        const currentAdminUserId = deviceSettings.adminUserId;
+        deviceSettings.rfidSupported = true;
+        deviceSettings.autoPlug = true;
+        deviceSettings.fastCharging = true;
+        deviceSettings.language = 'en';
+        deviceSettings.limitA = 16;
+        deviceSettings.timeHour = 8;
+        deviceSettings.timeMinute = 30;
+        deviceSettings.testMode = false;
+        deviceSettings.adminUserId = currentAdminUserId; // Keep admin user
+        
+        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+        response = {
+          type: 'response',
+          command: 'settingsReset',
+          success: true,
+          data: {
+            value: true,
+            message: 'Settings have been resetted'
+          },
+          timestamp: new Date().toISOString()
+        };
+        console.log(`🔄 Settings reset by admin: ${resetAdminId}`);
+      } else {
+        response = {
+          type: 'response',
+          command: 'settingsReset',
+          success: false,
+          error: 'No permission',
+          timestamp: new Date().toISOString()
+        };
+        console.log(`❌ Settings reset denied - invalid admin user`);
+      }
+      break;
       
       case 'set_limitA':
         const limitValue = command.data && typeof command.data.value === 'number' ? command.data.value : undefined;
@@ -1634,6 +1700,72 @@ async function handleProtocolV21Command(ws, command) {
             error: 'Invalid adminUserId value',
             timestamp: new Date().toISOString()
           };
+        }
+        break;
+
+      case 'testMode':
+        if (command.data && typeof command.data.value === 'boolean') {
+          deviceSettings.testMode = command.data.value;
+          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+          response = {
+            type: 'response',
+            command: 'testMode',
+            success: true,
+            data: {
+              value: command.data.value,
+              message: command.data.value ? 'Test mode is activated' : 'Test mode is deactivated'
+            },
+            timestamp: new Date().toISOString()
+          };
+          console.log(`🧪 Test mode ${command.data.value ? 'activated' : 'deactivated'}`);
+        } else {
+          response = {
+            type: 'response',
+            command: 'testMode',
+            success: false,
+            error: 'Invalid testMode value - boolean required',
+            timestamp: new Date().toISOString()
+          };
+        }
+        break;
+
+      case 'settingsReset':
+        // Verify admin user id
+        const resetAdminId = command.data && command.data.adminUserId ? command.data.adminUserId : null;
+        if (resetAdminId && deviceSettings.adminUserId === resetAdminId) {
+          // Reset settings to defaults (keep adminUserId)
+          const currentAdminUserId = deviceSettings.adminUserId;
+          deviceSettings.rfidSupported = true;
+          deviceSettings.autoPlug = true;
+          deviceSettings.fastCharging = true;
+          deviceSettings.language = 'en';
+          deviceSettings.limitA = 16;
+          deviceSettings.timeHour = 8;
+          deviceSettings.timeMinute = 30;
+          deviceSettings.testMode = false;
+          deviceSettings.adminUserId = currentAdminUserId; // Keep admin user
+          
+          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+          response = {
+            type: 'response',
+            command: 'settingsReset',
+            success: true,
+            data: {
+              value: true,
+              message: 'Settings have been resetted'
+            },
+            timestamp: new Date().toISOString()
+          };
+          console.log(`🔄 Settings reset by admin: ${resetAdminId}`);
+        } else {
+          response = {
+            type: 'response',
+            command: 'settingsReset',
+            success: false,
+            error: 'No permission',
+            timestamp: new Date().toISOString()
+          };
+          console.log(`❌ Settings reset denied - invalid admin user`);
         }
         break;
         
