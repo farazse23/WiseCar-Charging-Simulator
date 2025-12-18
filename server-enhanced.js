@@ -1,3 +1,22 @@
+// --- Console command to print users ---
+if (process.stdin && process.stdin.setRawMode) {
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', function(key) {
+    if (key === '\u0003') { // Ctrl+C
+      process.exit();
+    }
+    if (key.trim() === 'users') {
+      console.log('\nCurrent users:');
+      if (deviceSettings.users && deviceSettings.users.length > 0) {
+        deviceSettings.users.forEach(u => console.log(`- ${u.userId} (${u.role})`));
+      } else {
+        console.log('No users added.');
+      }
+    }
+  });
+}
 const WebSocket = require('ws');
 const express = require('express');
 const bonjour = require('bonjour')();
@@ -55,7 +74,8 @@ let deviceSettings = {
   timeHour: 8,
   timeMinute: 30,
   testMode: true,
-  adminUserId: null // Set to null for testing
+  adminUserId: "MIJGhRsdFfY6dMuPqWw2N2g5Mpg1", // Set to null for testing
+  users: [] // Array of { userId, role }
 };
 
 // Device state with new telemetry structure
@@ -992,51 +1012,109 @@ function handleConfigCommand(ws, command) {
       }
       break;
 
-    case 'adminUserId':
-      // Accept adminUserId in both command.data.adminUserId and command.data.value.adminUserId
-      let adminId = null;
+
+
+    case 'add_userId': {
+      let newUserId = null;
+      let newRole = null;
       if (command.data) {
-        if (typeof command.data.adminUserId === 'string') {
-          adminId = command.data.adminUserId;
-        } else if (command.data.value && typeof command.data.value === 'object' && typeof command.data.value.adminUserId === 'string') {
-          adminId = command.data.value.adminUserId;
-        } else if (typeof command.data.value === 'string') {
-          // In case value is sent directly as a string
-          adminId = command.data.value;
-        }
+        if (typeof command.data.userId === 'string') newUserId = command.data.userId;
+        if (typeof command.data.role === 'string') newRole = command.data.role;
       }
-      if (deviceSettings.adminUserId && deviceSettings.adminUserId !== "") {
+      if (!newUserId || !newRole) {
         response = {
           type: 'response',
-          command: 'adminUserId',
+          command: 'add_userId',
           success: false,
-          error: 'Admin user id has already been assigned',
+          error: 'Invalid userId or role',
           timestamp: new Date().toISOString()
         };
-      } else if (adminId) {
-        deviceSettings.adminUserId = adminId;
-        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-        response = {
-          type: 'response',
-          command: 'adminUserId',
-          success: true,
-          data: {
-            value: true,
-            message: 'Admin user id assigned'
-          },
-          timestamp: new Date().toISOString()
-        };
-        console.log(`👤 Admin user id assigned: ${adminId}`);
-      } else {
-        response = {
-          type: 'response',
-          command: 'adminUserId',
-          success: false,
-          error: 'Invalid adminUserId value',
-          timestamp: new Date().toISOString()
-        };
+        break;
       }
+      // Check for duplicate
+      if (deviceSettings.users.some(u => u.userId === newUserId)) {
+        response = {
+          type: 'response',
+          command: 'add_userId',
+          success: false,
+          error: 'User id has already been added',
+          timestamp: new Date().toISOString()
+        };
+        break;
+      }
+      // Add user
+      deviceSettings.users.push({ userId: newUserId, role: newRole });
+      // If admin, set adminUserId
+      if (newRole === 'admin') deviceSettings.adminUserId = newUserId;
+      saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+      response = {
+        type: 'response',
+        command: 'add_userId',
+        success: true,
+        data: {
+          value: true,
+          message: newRole === 'admin' ? 'Admin user id assigned' : 'User id added'
+        },
+        timestamp: new Date().toISOString()
+      };
+      console.log(`👤 User added: ${newUserId} (${newRole})`);
       break;
+    }
+
+    case 'delete_userId': {
+      let delUserId = null;
+      if (command.data && typeof command.data.userId === 'string') delUserId = command.data.userId;
+      if (!delUserId) {
+        response = {
+          type: 'response',
+          command: 'delete_userId',
+          success: false,
+          error: 'Invalid userId value',
+          timestamp: new Date().toISOString()
+        };
+        break;
+      }
+      const idx = deviceSettings.users.findIndex(u => u.userId === delUserId);
+      if (idx === -1) {
+        response = {
+          type: 'response',
+          command: 'delete_userId',
+          success: false,
+          error: 'User id does not exist',
+          timestamp: new Date().toISOString()
+        };
+        break;
+      }
+      const deleted = deviceSettings.users.splice(idx, 1)[0];
+      // If admin is deleted, clear adminUserId
+      if (deleted.role === 'admin') deviceSettings.adminUserId = null;
+      saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+      response = {
+        type: 'response',
+        command: 'delete_userId',
+        success: true,
+        data: {
+          value: true,
+          message: 'User id deleted'
+        },
+        timestamp: new Date().toISOString()
+      };
+      console.log(`🗑️ User deleted: ${delUserId}`);
+      break;
+    }
+
+    case 'list_users': {
+      response = {
+        type: 'response',
+        command: 'list_users',
+        success: true,
+        data: {
+          users: deviceSettings.users
+        },
+        timestamp: new Date().toISOString()
+      };
+      break;
+    }
 
     case 'testMode':
       if (command.data && typeof command.data.value === 'boolean') {
@@ -1656,52 +1734,109 @@ async function handleProtocolV21Command(ws, command) {
         }
         break;
         
-      case 'adminUserId':
-        // Accept adminUserId in both command.data.adminUserId and command.data.value.adminUserId
-        let adminId = null;
+
+      case 'add_userId': {
+        // Accept userId in command.data.userId
+        let newUserId = null;
+        let newRole = null;
         if (command.data) {
-          if (typeof command.data.adminUserId === 'string') {
-            adminId = command.data.adminUserId;
-          } else if (command.data.value && typeof command.data.value === 'object' && typeof command.data.value.adminUserId === 'string') {
-            adminId = command.data.value.adminUserId;
-          } else if (typeof command.data.value === 'string') {
-            // In case value is sent directly as a string
-            adminId = command.data.value;
-          }
+          if (typeof command.data.userId === 'string') newUserId = command.data.userId;
+          if (typeof command.data.role === 'string') newRole = command.data.role;
         }
-        
-        if (deviceSettings.adminUserId && deviceSettings.adminUserId !== "") {
+        if (!newUserId || !newRole) {
           response = {
             type: 'response',
-            command: 'adminUserId',
+            command: 'add_userId',
             success: false,
-            error: 'Admin user id has already been assigned',
+            error: 'Invalid userId or role',
             timestamp: new Date().toISOString()
           };
-        } else if (adminId) {
-          deviceSettings.adminUserId = adminId;
-          saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
-          response = {
-            type: 'response',
-            command: 'adminUserId',
-            success: true,
-            data: {
-              value: true,
-              message: 'Admin user id assigned'
-            },
-            timestamp: new Date().toISOString()
-          };
-          console.log(`👤 Admin user id assigned: ${adminId}`);
-        } else {
-          response = {
-            type: 'response',
-            command: 'adminUserId',
-            success: false,
-            error: 'Invalid adminUserId value',
-            timestamp: new Date().toISOString()
-          };
+          break;
         }
+        // Check for duplicate
+        if (deviceSettings.users.some(u => u.userId === newUserId)) {
+          response = {
+            type: 'response',
+            command: 'add_userId',
+            success: false,
+            error: 'User id has already been added',
+            timestamp: new Date().toISOString()
+          };
+          break;
+        }
+        // Add user
+        deviceSettings.users.push({ userId: newUserId, role: newRole });
+        // If admin, set adminUserId
+        if (newRole === 'admin') deviceSettings.adminUserId = newUserId;
+        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+        response = {
+          type: 'response',
+          command: 'add_userId',
+          success: true,
+          data: {
+            value: true,
+            message: newRole === 'admin' ? 'Admin user id assigned' : 'User id added'
+          },
+          timestamp: new Date().toISOString()
+        };
+        console.log(`👤 User added: ${newUserId} (${newRole})`);
         break;
+      }
+
+      case 'delete_userId': {
+        let delUserId = null;
+        if (command.data && typeof command.data.userId === 'string') delUserId = command.data.userId;
+        if (!delUserId) {
+          response = {
+            type: 'response',
+            command: 'delete_userId',
+            success: false,
+            error: 'Invalid userId value',
+            timestamp: new Date().toISOString()
+          };
+          break;
+        }
+        const idx = deviceSettings.users.findIndex(u => u.userId === delUserId);
+        if (idx === -1) {
+          response = {
+            type: 'response',
+            command: 'delete_userId',
+            success: false,
+            error: 'User id does not exist',
+            timestamp: new Date().toISOString()
+          };
+          break;
+        }
+        const deleted = deviceSettings.users.splice(idx, 1)[0];
+        // If admin is deleted, clear adminUserId
+        if (deleted.role === 'admin') deviceSettings.adminUserId = null;
+        saveJSON(CONFIG_FILE, { deviceInfo, deviceSettings, networkConfig });
+        response = {
+          type: 'response',
+          command: 'delete_userId',
+          success: true,
+          data: {
+            value: true,
+            message: 'User id deleted'
+          },
+          timestamp: new Date().toISOString()
+        };
+        console.log(`🗑️ User deleted: ${delUserId}`);
+        break;
+      }
+
+      case 'list_users': {
+        response = {
+          type: 'response',
+          command: 'list_users',
+          success: true,
+          data: {
+            users: deviceSettings.users
+          },
+          timestamp: new Date().toISOString()
+        };
+        break;
+      }
 
       case 'testMode':
         if (command.data && typeof command.data.value === 'boolean') {

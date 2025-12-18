@@ -8,24 +8,25 @@
   },
   "deviceSettings": {
     "rfidSupported": true,
-    "autoPlug": true,
-    "fastCharging": true,
+    "autoPlug": false,
+    "fastCharging": false,
     "language": "en",
     "limitA": 16,
-    "limitTimeHours": 9,
+    "limitTimeHours": 8,
     "limitTimeMinutes": 30,
     "timeHour": 8,
     "timeMinute": 30,
-    "testMode": false,
+    "testMode": true,
     "adminUserId": "MIJGhRsdFfY6dMuPqWw2N2g5Mpg1",
+    "users": [],
     "deviceTime": {
       "year": 2025,
       "month": 12,
-      "day": 17,
-      "hour": 0,
-      "minute": 56,
-      "second": 6,
-      "setAt": "2025-12-16T19:56:06.513Z"
+      "day": 18,
+      "hour": 17,
+      "minute": 14,
+      "second": 1,
+      "setAt": "2025-12-18T12:14:01.790Z"
     }
   },
   "networkConfig": {
