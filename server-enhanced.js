@@ -1103,13 +1103,16 @@ function handleConfigCommand(ws, command) {
       break;
     }
 
-    case 'list_users': {
+    case 'get_userIdList': {
+      // Optionally, you can add authorization here if needed
+      if (!deviceSettings.users) deviceSettings.users = [];
       response = {
         type: 'response',
-        command: 'list_users',
+        command: 'get_userIdList',
         success: true,
         data: {
-          users: deviceSettings.users
+          users: deviceSettings.users,
+          count: deviceSettings.users.length
         },
         timestamp: new Date().toISOString()
       };
@@ -1825,6 +1828,7 @@ async function handleProtocolV21Command(ws, command) {
         break;
       }
 
+
       case 'list_users': {
         response = {
           type: 'response',
@@ -1832,6 +1836,21 @@ async function handleProtocolV21Command(ws, command) {
           success: true,
           data: {
             users: deviceSettings.users
+          },
+          timestamp: new Date().toISOString()
+        };
+        break;
+      }
+
+      case 'get_userIdList': {
+        if (!deviceSettings.users) deviceSettings.users = [];
+        response = {
+          type: 'response',
+          command: 'get_userIdList',
+          success: true,
+          data: {
+            users: deviceSettings.users,
+            count: deviceSettings.users.length
           },
           timestamp: new Date().toISOString()
         };
