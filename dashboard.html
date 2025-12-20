@@ -1,0 +1,1414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WiseCar EV Charger Simulator</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  <style>
+    :root {
+      --bg-primary: #0a0a0f;
+      --bg-secondary: #12121a;
+      --bg-card: #1a1a24;
+      --bg-card-hover: #22222e;
+      --accent-primary: #00d4aa;
+      --accent-secondary: #00a88a;
+      --accent-glow: rgba(0, 212, 170, 0.3);
+      --accent-warning: #ffa726;
+      --accent-danger: #ef5350;
+      --accent-info: #42a5f5;
+      --accent-purple: #ab47bc;
+      --text-primary: #ffffff;
+      --text-secondary: #a0a0b0;
+      --text-muted: #606070;
+      --border-color: #2a2a3a;
+      --success: #4caf50;
+      --terminal-bg: #0d1117;
+      --terminal-text: #c9d1d9;
+      --terminal-green: #7ee787;
+      --terminal-yellow: #d29922;
+      --terminal-blue: #58a6ff;
+      --terminal-red: #f85149;
+      --terminal-purple: #bc8cff;
+    }
+
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Animated Background */
+    .bg-animation {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: -1;
+      background: 
+        radial-gradient(ellipse at 20% 20%, rgba(0, 212, 170, 0.08) 0%, transparent 50%),
+        radial-gradient(ellipse at 80% 80%, rgba(171, 71, 188, 0.06) 0%, transparent 50%),
+        radial-gradient(ellipse at 50% 50%, rgba(66, 165, 245, 0.04) 0%, transparent 70%);
+    }
+
+    /* Header */
+    .header {
+      background: rgba(18, 18, 26, 0.95);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid var(--border-color);
+      padding: 1rem 2rem;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-content {
+      max-width: 1600px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+    }
+
+    .logo-icon {
+      width: 48px;
+      height: 48px;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5rem;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .logo-text h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      background: linear-gradient(135deg, var(--accent-primary), #fff);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .logo-text span {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      font-weight: 400;
+    }
+
+    .connection-status {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      padding: 0.5rem 1rem;
+      background: var(--bg-card);
+      border-radius: 50px;
+      border: 1px solid var(--border-color);
+    }
+
+    .status-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent-danger);
+      animation: pulse 2s infinite;
+    }
+
+    .status-dot.connected {
+      background: var(--success);
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(1.1); }
+    }
+
+    /* Main Container */
+    .main-container {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 2rem;
+      display: grid;
+      grid-template-columns: 1fr 1.2fr;
+      gap: 2rem;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      overflow: hidden;
+      transition: all 0.3s ease;
+    }
+
+    .card:hover {
+      border-color: rgba(0, 212, 170, 0.3);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .card-header {
+      padding: 1.25rem 1.5rem;
+      border-bottom: 1px solid var(--border-color);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .card-header h2 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .card-header h2 i {
+      color: var(--accent-primary);
+      font-size: 1.2rem;
+    }
+
+    .card-body {
+      padding: 1.5rem;
+    }
+
+    /* Status Panel */
+    .status-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+    }
+
+    .status-item {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 1.25rem;
+      border: 1px solid var(--border-color);
+      transition: all 0.3s ease;
+    }
+
+    .status-item:hover {
+      transform: translateY(-2px);
+      border-color: var(--accent-primary);
+    }
+
+    .status-item .label {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 0.5rem;
+    }
+
+    .status-item .value {
+      font-size: 1.75rem;
+      font-weight: 700;
+      color: var(--text-primary);
+    }
+
+    .status-item .unit {
+      font-size: 0.9rem;
+      color: var(--text-secondary);
+      margin-left: 0.25rem;
+    }
+
+    .status-item.highlight {
+      background: linear-gradient(135deg, rgba(0, 212, 170, 0.1), rgba(0, 212, 170, 0.05));
+      border-color: var(--accent-primary);
+    }
+
+    .status-item.charging {
+      background: linear-gradient(135deg, rgba(76, 175, 80, 0.15), rgba(76, 175, 80, 0.05));
+      border-color: var(--success);
+    }
+
+    .status-item.charging .value {
+      color: var(--success);
+    }
+
+    /* Big Status Display */
+    .main-status {
+      text-align: center;
+      padding: 2rem;
+      margin-bottom: 1.5rem;
+      background: var(--bg-secondary);
+      border-radius: 16px;
+      border: 1px solid var(--border-color);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .main-status::before {
+      content: '';
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 3px;
+      background: linear-gradient(90deg, var(--accent-primary), var(--accent-purple), var(--accent-info));
+    }
+
+    .main-status.charging::before {
+      background: linear-gradient(90deg, var(--success), var(--accent-primary));
+      animation: glow-line 2s linear infinite;
+    }
+
+    @keyframes glow-line {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+
+    .charging-icon {
+      font-size: 4rem;
+      margin-bottom: 1rem;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+
+    .main-status.charging .charging-icon {
+      color: var(--success);
+      background: linear-gradient(135deg, var(--success), var(--accent-primary));
+      -webkit-background-clip: text;
+      background-clip: text;
+      animation: bounce 1s ease-in-out infinite;
+    }
+
+    @keyframes bounce {
+      0%, 100% { transform: translateY(0); }
+      50% { transform: translateY(-8px); }
+    }
+
+    .main-status h3 {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .main-status p {
+      color: var(--text-secondary);
+    }
+
+    /* Control Buttons */
+    .control-buttons {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 1rem;
+      margin-top: 1.5rem;
+    }
+
+    .btn {
+      padding: 1rem 1.5rem;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.75rem;
+      transition: all 0.3s ease;
+      font-family: 'Inter', sans-serif;
+    }
+
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+      color: #000;
+      box-shadow: 0 4px 20px var(--accent-glow);
+    }
+
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px var(--accent-glow);
+    }
+
+    .btn-danger {
+      background: linear-gradient(135deg, var(--accent-danger), #c62828);
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(239, 83, 80, 0.3);
+    }
+
+    .btn-danger:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 30px rgba(239, 83, 80, 0.4);
+    }
+
+    .btn-secondary {
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      border: 1px solid var(--border-color);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-primary);
+    }
+
+    .btn-info {
+      background: linear-gradient(135deg, var(--accent-info), #1976d2);
+      color: #fff;
+    }
+
+    .btn-purple {
+      background: linear-gradient(135deg, var(--accent-purple), #7b1fa2);
+      color: #fff;
+    }
+
+    .btn-warning {
+      background: linear-gradient(135deg, var(--accent-warning), #ef6c00);
+      color: #000;
+    }
+
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .btn-full {
+      grid-column: span 2;
+    }
+
+    /* Terminal */
+    .terminal-container {
+      height: 600px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .terminal {
+      flex: 1;
+      background: var(--terminal-bg);
+      border-radius: 12px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .terminal-header {
+      background: #161b22;
+      padding: 0.75rem 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      border-bottom: 1px solid #30363d;
+    }
+
+    .terminal-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+    }
+
+    .terminal-dot.red { background: #ff5f56; }
+    .terminal-dot.yellow { background: #ffbd2e; }
+    .terminal-dot.green { background: #27c93f; }
+
+    .terminal-title {
+      flex: 1;
+      text-align: center;
+      color: var(--text-muted);
+      font-size: 0.8rem;
+    }
+
+    .terminal-body {
+      flex: 1;
+      padding: 1rem;
+      overflow-y: auto;
+      line-height: 1.6;
+    }
+
+    .terminal-body::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .terminal-body::-webkit-scrollbar-track {
+      background: var(--terminal-bg);
+    }
+
+    .terminal-body::-webkit-scrollbar-thumb {
+      background: #30363d;
+      border-radius: 4px;
+    }
+
+    .log-entry {
+      padding: 0.25rem 0;
+      display: flex;
+      gap: 0.75rem;
+      border-bottom: 1px solid rgba(48, 54, 61, 0.5);
+    }
+
+    .log-time {
+      color: var(--text-muted);
+      min-width: 80px;
+    }
+
+    .log-icon {
+      min-width: 24px;
+      text-align: center;
+    }
+
+    .log-message {
+      color: var(--terminal-text);
+      word-break: break-word;
+    }
+
+    .log-entry.info .log-icon { color: var(--terminal-blue); }
+    .log-entry.success .log-icon { color: var(--terminal-green); }
+    .log-entry.warning .log-icon { color: var(--terminal-yellow); }
+    .log-entry.error .log-icon { color: var(--terminal-red); }
+    .log-entry.command .log-icon { color: var(--terminal-purple); }
+    .log-entry.telemetry .log-icon { color: var(--accent-primary); }
+
+    .log-entry.highlight {
+      background: rgba(0, 212, 170, 0.1);
+      margin: 0.25rem -1rem;
+      padding: 0.5rem 1rem;
+      border-radius: 4px;
+    }
+
+    /* Tabs */
+    .tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 1rem;
+    }
+
+    .tab {
+      padding: 0.75rem 1.25rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-weight: 500;
+      transition: all 0.3s ease;
+    }
+
+    .tab:hover {
+      background: var(--bg-card-hover);
+    }
+
+    .tab.active {
+      background: var(--accent-primary);
+      color: #000;
+      border-color: var(--accent-primary);
+    }
+
+    /* Quick Actions */
+    .quick-actions {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0.75rem;
+    }
+
+    .quick-action {
+      padding: 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.3s ease;
+    }
+
+    .quick-action:hover {
+      background: var(--bg-card-hover);
+      border-color: var(--accent-primary);
+      transform: translateY(-2px);
+    }
+
+    .quick-action i {
+      font-size: 1.5rem;
+      margin-bottom: 0.5rem;
+      color: var(--accent-primary);
+    }
+
+    .quick-action span {
+      display: block;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    /* Input Groups */
+    .input-group {
+      margin-bottom: 1rem;
+    }
+
+    .input-group label {
+      display: block;
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+      margin-bottom: 0.5rem;
+    }
+
+    .input-group input, .input-group select {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      color: var(--text-primary);
+      font-size: 1rem;
+      font-family: 'Inter', sans-serif;
+      transition: all 0.3s ease;
+    }
+
+    .input-group input:focus, .input-group select:focus {
+      outline: none;
+      border-color: var(--accent-primary);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    /* Users List */
+    .users-list {
+      max-height: 200px;
+      overflow-y: auto;
+    }
+
+    .user-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0.75rem;
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      margin-bottom: 0.5rem;
+      border: 1px solid var(--border-color);
+    }
+
+    .user-item .user-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .user-avatar {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 600;
+    }
+
+    .user-role {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      background: var(--accent-info);
+      color: #fff;
+    }
+
+    .user-role.admin {
+      background: var(--accent-purple);
+    }
+
+    .btn-icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-card);
+      color: var(--text-secondary);
+      transition: all 0.3s ease;
+    }
+
+    .btn-icon:hover {
+      background: var(--accent-danger);
+      color: #fff;
+    }
+
+    /* Session Info */
+    .session-card {
+      background: linear-gradient(135deg, rgba(0, 212, 170, 0.1), rgba(171, 71, 188, 0.05));
+      border: 1px solid var(--accent-primary);
+      border-radius: 12px;
+      padding: 1.25rem;
+      margin-top: 1rem;
+    }
+
+    .session-card h4 {
+      font-size: 0.9rem;
+      color: var(--accent-primary);
+      margin-bottom: 1rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .session-details {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 0.75rem;
+    }
+
+    .session-detail {
+      font-size: 0.85rem;
+    }
+
+    .session-detail .label {
+      color: var(--text-muted);
+    }
+
+    .session-detail .value {
+      color: var(--text-primary);
+      font-weight: 500;
+    }
+
+    /* Responsive */
+    @media (max-width: 1200px) {
+      .main-container {
+        grid-template-columns: 1fr;
+      }
+      
+      .terminal-container {
+        height: 400px;
+      }
+    }
+
+    @media (max-width: 768px) {
+      .header-content {
+        flex-direction: column;
+        gap: 1rem;
+      }
+      
+      .status-grid {
+        grid-template-columns: 1fr;
+      }
+      
+      .control-buttons {
+        grid-template-columns: 1fr;
+      }
+      
+      .btn-full {
+        grid-column: span 1;
+      }
+      
+      .quick-actions {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+
+    /* Loading Animation */
+    .loading {
+      display: inline-block;
+      width: 20px;
+      height: 20px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 1s ease-in-out infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Notifications */
+    .notification {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      padding: 1rem 1.5rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border-color);
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      z-index: 1000;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from {
+        transform: translateX(100%);
+        opacity: 0;
+      }
+      to {
+        transform: translateX(0);
+        opacity: 1;
+      }
+    }
+
+    .notification.success { border-left: 3px solid var(--success); }
+    .notification.error { border-left: 3px solid var(--accent-danger); }
+    .notification.info { border-left: 3px solid var(--accent-info); }
+
+    /* Panel Toggle */
+    .panel-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .panel-section:last-child {
+      margin-bottom: 0;
+    }
+
+    .section-title {
+      font-size: 0.85rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--border-color);
+    }
+
+    /* Energy Meter */
+    .energy-meter {
+      height: 8px;
+      background: var(--bg-secondary);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 0.5rem;
+    }
+
+    .energy-meter-fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--accent-primary), var(--success));
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+  </style>
+</head>
+<body>
+  <div class="bg-animation"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-content">
+      <div class="logo">
+        <div class="logo-icon">
+          <i class="fas fa-bolt"></i>
+        </div>
+        <div class="logo-text">
+          <h1>WiseCar Simulator</h1>
+          <span>EV Charger Control Dashboard</span>
+        </div>
+      </div>
+      <div class="connection-status">
+        <div class="status-dot" id="connectionDot"></div>
+        <span id="connectionText">Disconnected</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <div class="main-container">
+    <!-- Left Panel - Controls -->
+    <div class="left-panel">
+      <!-- Main Status Card -->
+      <div class="card">
+        <div class="card-header">
+          <h2><i class="fas fa-charging-station"></i> Charger Status</h2>
+          <span id="deviceId" style="color: var(--text-muted); font-size: 0.85rem;"></span>
+        </div>
+        <div class="card-body">
+          <div class="main-status" id="mainStatus">
+            <div class="charging-icon">
+              <i class="fas fa-plug"></i>
+            </div>
+            <h3 id="statusText">Disconnected</h3>
+            <p id="statusSubtext">Connect to start monitoring</p>
+          </div>
+
+          <div class="status-grid">
+            <div class="status-item">
+              <div class="label">Voltage</div>
+              <div class="value"><span id="voltage">0</span><span class="unit">V</span></div>
+            </div>
+            <div class="status-item">
+              <div class="label">Current</div>
+              <div class="value"><span id="current">0</span><span class="unit">A</span></div>
+            </div>
+            <div class="status-item highlight">
+              <div class="label">Power</div>
+              <div class="value"><span id="power">0</span><span class="unit">kW</span></div>
+            </div>
+            <div class="status-item">
+              <div class="label">Temperature</div>
+              <div class="value"><span id="temperature">0</span><span class="unit">°C</span></div>
+            </div>
+          </div>
+
+          <!-- Session Info -->
+          <div class="session-card" id="sessionCard" style="display: none;">
+            <h4><i class="fas fa-clock"></i> Active Session</h4>
+            <div class="session-details">
+              <div class="session-detail">
+                <span class="label">Session ID:</span>
+                <span class="value" id="sessionId">-</span>
+              </div>
+              <div class="session-detail">
+                <span class="label">Duration:</span>
+                <span class="value" id="sessionDuration">-</span>
+              </div>
+              <div class="session-detail">
+                <span class="label">Energy:</span>
+                <span class="value" id="sessionEnergy">0 kWh</span>
+              </div>
+              <div class="session-detail">
+                <span class="label">User:</span>
+                <span class="value" id="sessionUser">-</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="control-buttons">
+            <button class="btn btn-primary" id="btnStart" onclick="startCharging()">
+              <i class="fas fa-play"></i> Start Charging
+            </button>
+            <button class="btn btn-danger" id="btnStop" onclick="stopCharging()" disabled>
+              <i class="fas fa-stop"></i> Stop Charging
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Actions Card -->
+      <div class="card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+          <h2><i class="fas fa-bolt"></i> Quick Actions</h2>
+        </div>
+        <div class="card-body">
+          <div class="quick-actions">
+            <div class="quick-action" onclick="simulateRFID()">
+              <i class="fas fa-id-card"></i>
+              <span>Tap RFID</span>
+            </div>
+            <div class="quick-action" onclick="listUsers()">
+              <i class="fas fa-users"></i>
+              <span>List Users</span>
+            </div>
+            <div class="quick-action" onclick="listRFIDs()">
+              <i class="fas fa-tags"></i>
+              <span>List RFIDs</span>
+            </div>
+            <div class="quick-action" onclick="toggleTestMode()">
+              <i class="fas fa-flask"></i>
+              <span>Test Mode</span>
+            </div>
+            <div class="quick-action" onclick="getSettings()">
+              <i class="fas fa-cog"></i>
+              <span>Settings</span>
+            </div>
+            <div class="quick-action" onclick="clearLogs()">
+              <i class="fas fa-trash"></i>
+              <span>Clear Logs</span>
+            </div>
+          </div>
+
+          <!-- Current Limit -->
+          <div class="panel-section" style="margin-top: 1.5rem;">
+            <div class="section-title">Current Limit</div>
+            <div style="display: flex; gap: 0.75rem; align-items: center;">
+              <input type="range" id="limitSlider" min="6" max="32" value="16" 
+                     style="flex: 1; accent-color: var(--accent-primary);"
+                     onchange="updateLimitDisplay()">
+              <span id="limitValue" style="min-width: 50px; font-weight: 600;">16 A</span>
+              <button class="btn btn-secondary" onclick="setCurrentLimit()" style="padding: 0.5rem 1rem;">
+                Set
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Users Management Card -->
+      <div class="card" style="margin-top: 1.5rem;">
+        <div class="card-header">
+          <h2><i class="fas fa-user-shield"></i> User Management</h2>
+        </div>
+        <div class="card-body">
+          <div class="input-group">
+            <label>User ID</label>
+            <input type="text" id="newUserId" placeholder="Enter user ID...">
+          </div>
+          <div class="input-group">
+            <label>Role</label>
+            <select id="newUserRole">
+              <option value="user">User</option>
+              <option value="admin">Admin</option>
+            </select>
+          </div>
+          <button class="btn btn-info" onclick="addUser()" style="width: 100%;">
+            <i class="fas fa-user-plus"></i> Add User
+          </button>
+
+          <div class="section-title" style="margin-top: 1.5rem;">Registered Users</div>
+          <div class="users-list" id="usersList">
+            <p style="color: var(--text-muted); text-align: center; padding: 1rem;">
+              Click "List Users" to load
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Right Panel - Terminal -->
+    <div class="right-panel">
+      <div class="card terminal-container">
+        <div class="card-header">
+          <h2><i class="fas fa-terminal"></i> Live Console</h2>
+          <div class="tabs">
+            <div class="tab active" onclick="switchTab('all')">All</div>
+            <div class="tab" onclick="switchTab('commands')">Commands</div>
+            <div class="tab" onclick="switchTab('telemetry')">Telemetry</div>
+          </div>
+        </div>
+        <div class="terminal">
+          <div class="terminal-header">
+            <div class="terminal-dot red"></div>
+            <div class="terminal-dot yellow"></div>
+            <div class="terminal-dot green"></div>
+            <div class="terminal-title">wisecar-simulator — node server-enhanced.js</div>
+          </div>
+          <div class="terminal-body" id="terminalBody">
+            <div class="log-entry info">
+              <span class="log-time">--:--:--</span>
+              <span class="log-icon"><i class="fas fa-info-circle"></i></span>
+              <span class="log-message">Dashboard initialized. Connecting to simulator...</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Container -->
+  <div id="notificationContainer"></div>
+
+  <script>
+    // WebSocket connection
+    let ws = null;
+    let isConnected = false;
+    let currentTab = 'all';
+    let logs = [];
+
+    // Initialize
+    document.addEventListener('DOMContentLoaded', () => {
+      connect();
+      updateLimitDisplay();
+    });
+
+    // WebSocket Connection
+    function connect() {
+      const host = window.location.hostname || 'localhost';
+      const wsUrl = `ws://${host}:3000`;
+      
+      addLog('info', `Connecting to ${wsUrl}...`);
+      
+      ws = new WebSocket(wsUrl);
+      
+      ws.onopen = () => {
+        isConnected = true;
+        updateConnectionStatus(true);
+        addLog('success', 'Connected to WiseCar Simulator');
+        showNotification('Connected to simulator', 'success');
+      };
+      
+      ws.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data);
+          handleMessage(data);
+        } catch (e) {
+          addLog('warning', `Raw message: ${event.data}`);
+        }
+      };
+      
+      ws.onclose = () => {
+        isConnected = false;
+        updateConnectionStatus(false);
+        addLog('error', 'Disconnected from simulator');
+        showNotification('Disconnected from simulator', 'error');
+        
+        // Reconnect after 3 seconds
+        setTimeout(connect, 3000);
+      };
+      
+      ws.onerror = (error) => {
+        addLog('error', 'WebSocket error occurred');
+      };
+    }
+
+    // Handle incoming messages
+    function handleMessage(data) {
+      // Hello/Handshake
+      if (data.event === 'hello') {
+        addLog('success', `🔗 Handshake received - Device: ${data.deviceId}`, true);
+        document.getElementById('deviceId').textContent = data.deviceId;
+        
+        if (data.settings) {
+          addLog('info', `Settings: limitA=${data.settings.limitA}A, testMode=${data.settings.testMode}`);
+        }
+        
+        updateStatus('connected', 'Ready to charge');
+        return;
+      }
+      
+      // Telemetry
+      if (data.event === 'telemetry') {
+        updateTelemetry(data.telemetry, data.lastSession);
+        return;
+      }
+      
+      // Response to commands
+      if (data.type === 'response') {
+        const icon = data.success ? '✅' : '❌';
+        addLog(data.success ? 'success' : 'error', 
+          `${icon} ${data.command}: ${data.success ? 'Success' : data.error || 'Failed'}`, true);
+        
+        if (data.command === 'get_userIdList' && data.success) {
+          updateUsersList(data.data.users);
+        }
+        return;
+      }
+      
+      // Generic message logging
+      if (data.ack !== undefined) {
+        addLog(data.ack ? 'success' : 'error', `Response: ${data.msg || JSON.stringify(data)}`);
+      } else {
+        addLog('command', `📨 ${JSON.stringify(data)}`);
+      }
+    }
+
+    // Update telemetry display
+    function updateTelemetry(telemetry, session) {
+      if (!telemetry) return;
+      
+      document.getElementById('voltage').textContent = telemetry.voltageV || 0;
+      document.getElementById('current').textContent = (telemetry.currentA || 0).toFixed(1);
+      document.getElementById('power').textContent = (telemetry.powerkW || 0).toFixed(2);
+      document.getElementById('temperature').textContent = telemetry.temperatureC || 0;
+      
+      const isCharging = telemetry.status === 'charging';
+      const mainStatus = document.getElementById('mainStatus');
+      
+      if (isCharging) {
+        updateStatus('charging', 'Charging in progress');
+        mainStatus.classList.add('charging');
+        document.getElementById('btnStart').disabled = true;
+        document.getElementById('btnStop').disabled = false;
+        
+        // Update session info
+        if (session) {
+          document.getElementById('sessionCard').style.display = 'block';
+          document.getElementById('sessionId').textContent = session.sessionId || '-';
+          document.getElementById('sessionEnergy').textContent = (session.energykWh || 0).toFixed(3) + ' kWh';
+          document.getElementById('sessionUser').textContent = session.sessionUserId || session.rfidId || 'Manual';
+          
+          if (session.startAt) {
+            const start = new Date(session.startAt);
+            const now = new Date();
+            const diff = Math.floor((now - start) / 1000);
+            const mins = Math.floor(diff / 60);
+            const secs = diff % 60;
+            document.getElementById('sessionDuration').textContent = `${mins}m ${secs}s`;
+          }
+        }
+        
+        // Log telemetry occasionally (every 5 seconds)
+        if (Math.random() < 0.1) {
+          addLog('telemetry', `⚡ ${telemetry.currentA?.toFixed(1)}A @ ${telemetry.voltageV}V = ${telemetry.powerkW?.toFixed(2)}kW`);
+        }
+      } else {
+        if (telemetry.status === 'connected') {
+          updateStatus('connected', 'Ready to charge');
+        } else {
+          updateStatus('disconnected', 'Vehicle not connected');
+        }
+        mainStatus.classList.remove('charging');
+        document.getElementById('btnStart').disabled = false;
+        document.getElementById('btnStop').disabled = true;
+        document.getElementById('sessionCard').style.display = 'none';
+      }
+    }
+
+    // Update connection status
+    function updateConnectionStatus(connected) {
+      const dot = document.getElementById('connectionDot');
+      const text = document.getElementById('connectionText');
+      
+      if (connected) {
+        dot.classList.add('connected');
+        text.textContent = 'Connected';
+      } else {
+        dot.classList.remove('connected');
+        text.textContent = 'Disconnected';
+      }
+    }
+
+    // Update main status display
+    function updateStatus(status, subtext) {
+      const statusText = document.getElementById('statusText');
+      const statusSubtext = document.getElementById('statusSubtext');
+      const icon = document.querySelector('.charging-icon i');
+      
+      const statusMap = {
+        disconnected: { text: 'Disconnected', icon: 'fa-plug' },
+        connected: { text: 'Connected', icon: 'fa-plug-circle-check' },
+        charging: { text: 'Charging', icon: 'fa-bolt' }
+      };
+      
+      const config = statusMap[status] || statusMap.disconnected;
+      statusText.textContent = config.text;
+      statusSubtext.textContent = subtext;
+      icon.className = `fas ${config.icon}`;
+    }
+
+    // Add log entry
+    function addLog(type, message, highlight = false) {
+      const time = new Date().toLocaleTimeString('en-US', { hour12: false });
+      const icons = {
+        info: 'fa-info-circle',
+        success: 'fa-check-circle',
+        warning: 'fa-exclamation-triangle',
+        error: 'fa-times-circle',
+        command: 'fa-terminal',
+        telemetry: 'fa-chart-line'
+      };
+      
+      const log = { time, type, message, highlight };
+      logs.push(log);
+      
+      // Keep last 500 logs
+      if (logs.length > 500) logs.shift();
+      
+      renderLogs();
+    }
+
+    // Render logs based on current filter
+    function renderLogs() {
+      const terminal = document.getElementById('terminalBody');
+      let filteredLogs = logs;
+      
+      if (currentTab === 'commands') {
+        filteredLogs = logs.filter(l => l.type === 'command' || l.type === 'success' || l.type === 'error');
+      } else if (currentTab === 'telemetry') {
+        filteredLogs = logs.filter(l => l.type === 'telemetry');
+      }
+      
+      terminal.innerHTML = filteredLogs.map(log => {
+        const icons = {
+          info: 'fa-info-circle',
+          success: 'fa-check-circle',
+          warning: 'fa-exclamation-triangle',
+          error: 'fa-times-circle',
+          command: 'fa-terminal',
+          telemetry: 'fa-chart-line'
+        };
+        
+        return `
+          <div class="log-entry ${log.type} ${log.highlight ? 'highlight' : ''}">
+            <span class="log-time">${log.time}</span>
+            <span class="log-icon"><i class="fas ${icons[log.type]}"></i></span>
+            <span class="log-message">${log.message}</span>
+          </div>
+        `;
+      }).join('');
+      
+      terminal.scrollTop = terminal.scrollHeight;
+    }
+
+    // Switch tab
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      event.target.classList.add('active');
+      renderLogs();
+    }
+
+    // Clear logs
+    function clearLogs() {
+      logs = [];
+      renderLogs();
+      addLog('info', 'Logs cleared');
+    }
+
+    // Send command
+    function sendCommand(command) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        showNotification('Not connected to simulator', 'error');
+        return;
+      }
+      
+      addLog('command', `📤 Sending: ${JSON.stringify(command)}`);
+      ws.send(JSON.stringify(command));
+    }
+
+    // Control functions
+    function startCharging() {
+      sendCommand({
+        type: 'action',
+        command: 'start',
+        data: { userId: 'dashboard_user' }
+      });
+      addLog('info', '🔌 Starting charging session...');
+    }
+
+    function stopCharging() {
+      sendCommand({
+        type: 'action',
+        command: 'stop',
+        data: {}
+      });
+      addLog('info', '⏹️ Stopping charging session...');
+    }
+
+    function simulateRFID() {
+      sendCommand({
+        type: 'action',
+        command: 'rfid_tap',
+        data: { rfidId: 'RFID_' + Math.floor(Math.random() * 10000) }
+      });
+      addLog('info', '🏷️ Simulating RFID tap...');
+    }
+
+    function listUsers() {
+      sendCommand({
+        type: 'config',
+        command: 'get_userIdList',
+        data: {}
+      });
+      addLog('info', '👥 Fetching user list...');
+    }
+
+    function listRFIDs() {
+      sendCommand({
+        action: 'rfid_list'
+      });
+      addLog('info', '🏷️ Fetching RFID list...');
+    }
+
+    function toggleTestMode() {
+      sendCommand({
+        type: 'config',
+        command: 'testMode',
+        data: { value: true }
+      });
+      addLog('info', '🧪 Toggling test mode...');
+    }
+
+    function getSettings() {
+      // Request fresh handshake
+      addLog('info', '⚙️ Requesting device settings...');
+      ws.close();
+      setTimeout(connect, 500);
+    }
+
+    function setCurrentLimit() {
+      const limit = parseInt(document.getElementById('limitSlider').value);
+      sendCommand({
+        type: 'config',
+        command: 'set_limitA',
+        data: { value: limit }
+      });
+      addLog('info', `⚡ Setting current limit to ${limit}A...`);
+    }
+
+    function updateLimitDisplay() {
+      const value = document.getElementById('limitSlider').value;
+      document.getElementById('limitValue').textContent = value + ' A';
+    }
+
+    function addUser() {
+      const userId = document.getElementById('newUserId').value.trim();
+      const role = document.getElementById('newUserRole').value;
+      
+      if (!userId) {
+        showNotification('Please enter a user ID', 'error');
+        return;
+      }
+      
+      sendCommand({
+        type: 'config',
+        command: 'add_userId',
+        data: { userId, role }
+      });
+      
+      document.getElementById('newUserId').value = '';
+      addLog('info', `👤 Adding user: ${userId} (${role})...`);
+    }
+
+    function deleteUser(userId) {
+      sendCommand({
+        type: 'config',
+        command: 'delete_userId',
+        data: { userId }
+      });
+      addLog('info', `🗑️ Deleting user: ${userId}...`);
+      setTimeout(listUsers, 500);
+    }
+
+    function updateUsersList(users) {
+      const container = document.getElementById('usersList');
+      
+      if (!users || users.length === 0) {
+        container.innerHTML = '<p style="color: var(--text-muted); text-align: center; padding: 1rem;">No users registered</p>';
+        return;
+      }
+      
+      container.innerHTML = users.map(user => `
+        <div class="user-item">
+          <div class="user-info">
+            <div class="user-avatar">${user.userId.charAt(0).toUpperCase()}</div>
+            <div>
+              <div style="font-weight: 500;">${user.userId.substring(0, 20)}${user.userId.length > 20 ? '...' : ''}</div>
+              <span class="user-role ${user.role}">${user.role}</span>
+            </div>
+          </div>
+          <button class="btn-icon" onclick="deleteUser('${user.userId}')" title="Delete user">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    // Show notification
+    function showNotification(message, type = 'info') {
+      const container = document.getElementById('notificationContainer');
+      const notification = document.createElement('div');
+      notification.className = `notification ${type}`;
+      notification.innerHTML = `
+        <i class="fas ${type === 'success' ? 'fa-check-circle' : type === 'error' ? 'fa-times-circle' : 'fa-info-circle'}"></i>
+        <span>${message}</span>
+      `;
+      
+      container.appendChild(notification);
+      
+      setTimeout(() => {
+        notification.style.animation = 'slideIn 0.3s ease reverse';
+        setTimeout(() => notification.remove(), 300);
+      }, 3000);
+    }
+  </script>
+</body>
+</html>

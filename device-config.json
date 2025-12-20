@@ -8,8 +8,8 @@
   },
   "deviceSettings": {
     "rfidSupported": true,
-    "autoPlug": true,
-    "fastCharging": true,
+    "autoPlug": false,
+    "fastCharging": false,
     "language": "en",
     "limitA": 16,
     "limitTimeHours": 0,
@@ -22,11 +22,11 @@
     "deviceTime": {
       "year": 2025,
       "month": 12,
-      "day": 19,
-      "hour": 19,
-      "minute": 53,
-      "second": 9,
-      "setAt": "2025-12-19T14:53:09.189Z"
+      "day": 20,
+      "hour": 12,
+      "minute": 24,
+      "second": 58,
+      "setAt": "2025-12-20T07:24:58.452Z"
     }
   },
   "networkConfig": {

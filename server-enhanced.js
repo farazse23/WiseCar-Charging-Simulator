@@ -2091,6 +2091,80 @@ async function handleProtocolV21Command(ws, command) {
         };
         console.log('🏓 Command: Ping - Pong response sent');
         break;
+      
+      // Dashboard quick start/stop commands
+      case 'start':
+        if (!deviceState.isCharging) {
+          const userId = command.data?.userId || 'dashboard_user';
+          const session = startChargingSession(userId);
+          response = {
+            type: 'response',
+            command: 'start',
+            success: true,
+            data: {
+              sessionId: session.sessionId,
+              message: 'Charging started'
+            },
+            timestamp: new Date().toISOString()
+          };
+          console.log(`🔌 Dashboard: Charging started by ${userId}`);
+        } else {
+          response = {
+            type: 'response',
+            command: 'start',
+            success: false,
+            error: 'Already charging',
+            timestamp: new Date().toISOString()
+          };
+        }
+        break;
+        
+      case 'stop':
+        if (deviceState.isCharging) {
+          const session = stopChargingSession('Dashboard stop');
+          response = {
+            type: 'response',
+            command: 'stop',
+            success: true,
+            data: {
+              sessionId: session.sessionId,
+              energykWh: session.energykW,
+              message: 'Charging stopped'
+            },
+            timestamp: new Date().toISOString()
+          };
+          console.log('⏹️ Dashboard: Charging stopped');
+        } else {
+          response = {
+            type: 'response',
+            command: 'stop',
+            success: false,
+            error: 'Not charging',
+            timestamp: new Date().toISOString()
+          };
+        }
+        break;
+        
+      case 'rfid_tap':
+        const rfidId = command.data?.rfidId || ('RFID_' + Math.floor(Math.random() * 10000));
+        // Add RFID if it doesn't exist (for testing)
+        if (!findRFIDById(rfidId)) {
+          addRFID({ id: rfidId, userId: 'dashboard_user' });
+        }
+        const tapResult = tapRFID(rfidId);
+        response = {
+          type: 'response',
+          command: 'rfid_tap',
+          success: tapResult.success,
+          data: {
+            rfidId: rfidId,
+            message: tapResult.msg,
+            charging: deviceState.isCharging
+          },
+          timestamp: new Date().toISOString()
+        };
+        console.log(`🏷️ Dashboard: RFID tap ${rfidId} - ${tapResult.msg}`);
+        break;
         
       case 'get_status':
         response = {
@@ -2287,6 +2361,19 @@ async function startServer() {
     // Create HTTP server for RFID simulation endpoints
     const app = express();
     app.use(express.json());
+    
+    // Serve static files (dashboard)
+    app.use(express.static(path.join(__dirname)));
+    
+    // Dashboard route
+    app.get('/', (req, res) => {
+      res.sendFile(path.join(__dirname, 'dashboard.html'));
+    });
+    
+    app.get('/dashboard', (req, res) => {
+      res.sendFile(path.join(__dirname, 'dashboard.html'));
+    });
+    
     // Allow CORS from dashboard and other tools
     app.use((req, res, next) => {
       res.header('Access-Control-Allow-Origin', '*');
@@ -2653,6 +2740,8 @@ async function startServer() {
 
     app.listen(config.httpPort, () => {
       console.log(`🌐 HTTP API available at: http://${deviceIP}:${config.httpPort}`);
+      console.log(`🎨 Dashboard available at: http://${deviceIP}:${config.httpPort}/dashboard`);
+      console.log(`   Or open: http://localhost:${config.httpPort}/dashboard`);
     });
 
     // mDNS advertisement (works in both hotspot and Wi-Fi modes)
